@@ -36,6 +36,8 @@ CRM Clientes/
 
 # Scripts de teste com tokens sensíveis (raiz do projeto)
 *.js
+# Permitir arquivos de configuração essenciais
+!*.config.js
 !vite.config.ts
 
 # Arquivos SQL
