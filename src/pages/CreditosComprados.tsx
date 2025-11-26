@@ -1,0 +1,457 @@
+import React, { useEffect, useState } from 'react';
+import { Search, Filter, CreditCard, Plus, X } from 'lucide-react';
+import Layout from '../components/Layout';
+import { supabase } from '../lib/supabase';
+import type { CompraCredito, CreditoMensal } from '../types';
+import { formatDateBR } from '../utils/dateUtils';
+
+export default function CreditosComprados() {
+  const [compras, setCompras] = useState<CompraCredito[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [painelFilter, setPainelFilter] = useState('');
+  const [mesFilter, setMesFilter] = useState('');
+  const [paineis, setPaineis] = useState<string[]>([]);
+  const [meses, setMeses] = useState<string[]>([]);
+  const [resumoMensal, setResumoMensal] = useState<CreditoMensal[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [availablePanels, setAvailablePanels] = useState<Array<{ name: string; display_name: string }>>([]);
+  const [formData, setFormData] = useState({
+    data: new Date().toISOString().split('T')[0],
+    painel: '',
+    quantidade_creditos: 0,
+    valor_total: 0,
+  });
+
+  useEffect(() => {
+    fetchCompras();
+    fetchPanels();
+  }, []);
+
+  async function fetchPanels() {
+    try {
+      const { data, error: panelsError } = await supabase
+        .from('panels')
+        .select('name, display_name')
+        .eq('active', true)
+        .order('name');
+
+      if (panelsError) throw panelsError;
+
+      setAvailablePanels((data || []).map(p => ({ name: p.name, display_name: p.display_name })));
+    } catch (err) {
+      console.error('Error fetching panels:', err);
+      // Fallback
+      setAvailablePanels([
+        { name: 'Unitv', display_name: 'Unitv' },
+        { name: 'Warez', display_name: 'Warez' },
+        { name: 'Elite', display_name: 'Elite' }
+      ]);
+    }
+  }
+
+  async function fetchCompras() {
+    try {
+      setError(null);
+      const { data, error: supabaseError } = await supabase
+        .from('compras_creditos')
+        .select('*')
+        .order('data', { ascending: false });
+
+      if (supabaseError) throw supabaseError;
+
+      setCompras(data || []);
+
+      const uniquePaineis = [...new Set(data?.map((c: any) => c.painel) || [])];
+      setPaineis(uniquePaineis);
+
+      const uniqueMeses = [...new Set((data || []).map((c: any) => {
+        // Extrai apenas a parte da data (YYYY-MM-DD) para evitar problemas de timezone
+        const dateOnly = c.data.split('T')[0];
+        const [year, month] = dateOnly.split('-');
+        return `${year}-${month}`;
+      }))];
+      setMeses(uniqueMeses.sort().reverse());
+
+      calculateResumoMensal(data || []);
+    } catch (err) {
+      console.error('Error fetching compras:', err);
+      setError('Erro ao carregar os dados. Por favor, tente novamente.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const calculateResumoMensal = (data: CompraCredito[]) => {
+    const monthMap = new Map<string, CreditoMensal>();
+
+    data.forEach((compra: any) => {
+      // Extrai apenas a parte da data (YYYY-MM-DD) para evitar problemas de timezone
+      const dateOnly = compra.data.split('T')[0];
+      const [year, month] = dateOnly.split('-');
+      const monthKey = `${year}-${month}`;
+
+      const current = monthMap.get(monthKey) || {
+        mes: monthKey,
+        total_creditos: 0,
+        valor_total: 0,
+        custo_medio: 0,
+        paineis: [] as any[],
+      };
+
+      current.total_creditos += compra.quantidade_creditos;
+      current.valor_total += compra.valor_total;
+      current.custo_medio = current.valor_total / current.total_creditos;
+
+      const painelIdx = current.paineis.findIndex((p: any) => p.painel === compra.painel);
+      if (painelIdx === -1) {
+        current.paineis.push({
+          painel: compra.painel,
+          creditos: compra.quantidade_creditos,
+          valor_total: compra.valor_total,
+          custo_medio: compra.valor_total / compra.quantidade_creditos,
+        });
+      } else {
+        const painel = current.paineis[painelIdx];
+        painel.creditos += compra.quantidade_creditos;
+        painel.valor_total += compra.valor_total;
+        painel.custo_medio = painel.valor_total / painel.creditos;
+      }
+
+      monthMap.set(monthKey, current);
+    });
+
+    const sortedMonths = Array.from(monthMap.values())
+      .sort((a, b) => b.mes.localeCompare(a.mes))
+      .slice(0, 3);
+
+    setResumoMensal(sortedMonths);
+  };
+
+  const filteredCompras = compras.filter(compra => {
+    const matchesPainel = !painelFilter || compra.painel === painelFilter;
+    // Extrai apenas a parte da data (YYYY-MM-DD) para evitar problemas de timezone
+    const dateOnly = compra.data.split('T')[0];
+    const [year, month] = dateOnly.split('-');
+    const monthKey = `${year}-${month}`;
+    const matchesMes = !mesFilter || monthKey === mesFilter;
+    return matchesPainel && matchesMes;
+  });
+
+  const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  const formatDate = (dateString: string) => formatDateBR(dateString);
+  const formatMonth = (monthKey: string) => {
+    const [year, month] = monthKey.split('-');
+    return new Date(parseInt(year), parseInt(month) - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!formData.painel || formData.quantidade_creditos <= 0 || formData.valor_total <= 0) {
+      setError('Preencha todos os campos obrigatórios com valores válidos');
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      setError(null);
+
+      // Registrar compra de créditos
+      const { error: compraError } = await supabase
+        .from('compras_creditos')
+        .insert([{
+          data: formData.data,
+          painel: formData.painel,
+          quantidade_creditos: formData.quantidade_creditos,
+          valor_total: formData.valor_total,
+        }]);
+
+      if (compraError) throw compraError;
+
+      // Registrar saída no caixa
+      const { error: caixaError } = await supabase
+        .from('caixa_movimentacoes')
+        .insert({
+          data: formData.data,
+          historico: `Compra de créditos - ${formData.painel} (${formData.quantidade_creditos} créditos)`,
+          entrada: 0,
+          saida: formData.valor_total,
+        });
+
+      if (caixaError) throw caixaError;
+
+      // Limpar formulário e fechar modal
+      setFormData({
+        data: new Date().toISOString().split('T')[0],
+        painel: '',
+        quantidade_creditos: 0,
+        valor_total: 0,
+      });
+      setShowForm(false);
+      
+      // Recarregar dados
+      await fetchCompras();
+    } catch (err) {
+      console.error('Error saving compra:', err);
+      setError('Erro ao salvar a compra. Por favor, tente novamente.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <Layout>
+      <div className="mb-6 flex justify-between items-center">
+        <h1 className="text-2xl font-bold text-slate-100 flex items-center">
+          <CreditCard className="h-6 w-6 mr-2" />
+          Créditos Comprados
+        </h1>
+        <button
+          onClick={() => setShowForm(true)}
+          className="flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Nova Compra
+        </button>
+      </div>
+
+      {/* Resumo mensal (últimos 3 meses) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        {resumoMensal.map((mes) => (
+          <div key={mes.mes} className="bg-slate-800 rounded-lg shadow p-6 border border-slate-700">
+            <h3 className="text-lg font-semibold text-slate-100 mb-4">{formatMonth(mes.mes)}</h3>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <p className="text-sm text-slate-400">Total de Créditos</p>
+                <p className="text-lg font-medium text-slate-100">{mes.total_creditos}</p>
+              </div>
+              <div>
+                <p className="text-sm text-slate-400">Valor Total</p>
+                <p className="text-lg font-medium text-slate-100">{formatCurrency(mes.valor_total)}</p>
+              </div>
+              <div>
+                <p className="text-sm text-slate-400">Custo Médio</p>
+                <p className="text-lg font-medium text-slate-100">{formatCurrency(mes.custo_medio)}</p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filtros */}
+      <div className="mb-6 space-y-4 md:space-y-0 md:flex md:items-center md:space-x-4">
+        <div className="flex items-center space-x-2">
+          <Filter className="h-5 w-5 text-slate-400" />
+          <select
+            className="border border-slate-700 bg-slate-900 text-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-600"
+            value={painelFilter}
+            onChange={(e) => setPainelFilter(e.target.value)}
+          >
+            <option value="">Todos os Painéis</option>
+            {paineis.map(painel => (
+              <option key={painel} value={painel}>{painel}</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-center space-x-2">
+          <Filter className="h-5 w-5 text-slate-400" />
+          <select
+            className="border border-slate-700 bg-slate-900 text-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-600"
+            value={mesFilter}
+            onChange={(e) => setMesFilter(e.target.value)}
+          >
+            <option value="">Todos os Meses</option>
+            {meses.map(mes => (
+              <option key={mes} value={mes}>{formatMonth(mes)}</option>
+            ))}
+          </select>
+        </div>
+        <div className="relative flex-1 md:max-w-sm">
+          <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Buscar por painel..."
+            className="pl-10 pr-4 py-2 rounded-lg w-full bg-slate-900 border border-slate-700 text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
+            value={painelFilter}
+            onChange={(e) => setPainelFilter(e.target.value)}
+          />
+        </div>
+      </div>
+
+      {error && (
+        <div className="bg-red-900/20 border border-red-700 text-red-200 px-4 py-3 rounded mb-6">{error}</div>
+      )}
+
+      {/* Tabela de compras */}
+      <div className="bg-slate-800 rounded-lg shadow overflow-x-auto border border-slate-700">
+        <table className="min-w-full divide-y divide-slate-700">
+          <thead className="bg-slate-900">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Data</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Painel</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Créditos</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Valor Total</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Custo Médio</th>
+            </tr>
+          </thead>
+          <tbody className="bg-slate-800 divide-y divide-slate-700">
+            {loading ? (
+              <tr>
+                <td colSpan={5} className="px-6 py-4 text-center text-slate-300">
+                  <div className="flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                    <span className="ml-2">Carregando...</span>
+                  </div>
+                </td>
+              </tr>
+            ) : filteredCompras.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-6 py-4 text-center text-slate-300">Nenhuma compra encontrada</td>
+              </tr>
+            ) : (
+              filteredCompras.map((compra) => (
+                <tr key={compra.id}>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-100">{formatDate(compra.data)}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{compra.painel}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{compra.quantidade_creditos}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{formatCurrency(compra.valor_total)}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{formatCurrency(compra.valor_total / compra.quantidade_creditos)}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Modal de Nova Compra */}
+      {showForm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-lg shadow-xl border border-slate-700 max-w-md w-full">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-semibold text-slate-100 flex items-center">
+                  <Plus className="h-5 w-5 mr-2 text-blue-400" />
+                  Nova Compra de Créditos
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowForm(false);
+                    setError(null);
+                  }}
+                  className="text-slate-400 hover:text-slate-200"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {error && (
+                  <div className="bg-red-900/20 border border-red-700 text-red-200 px-4 py-3 rounded">
+                    {error}
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-400 mb-2">
+                    Data da Compra
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={formData.data}
+                    onChange={(e) => setFormData({ ...formData, data: e.target.value })}
+                    disabled={isSaving}
+                    className="w-full px-4 py-2 rounded-md bg-slate-900 border border-slate-700 text-slate-200 focus:border-blue-500 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-400 mb-2">
+                    Painel *
+                  </label>
+                  <select
+                    required
+                    value={formData.painel}
+                    onChange={(e) => setFormData({ ...formData, painel: e.target.value })}
+                    disabled={isSaving}
+                    className="w-full px-4 py-2 rounded-md bg-slate-900 border border-slate-700 text-slate-200 focus:border-blue-500 focus:ring-blue-500"
+                  >
+                    <option value="">Selecione um painel</option>
+                    {availablePanels.map((panel) => (
+                      <option key={panel.name} value={panel.name}>
+                        {panel.display_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-400 mb-2">
+                    Quantidade de Créditos *
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    step="1"
+                    value={formData.quantidade_creditos || ''}
+                    onChange={(e) => setFormData({ ...formData, quantidade_creditos: parseInt(e.target.value) || 0 })}
+                    disabled={isSaving}
+                    className="w-full px-4 py-2 rounded-md bg-slate-900 border border-slate-700 text-slate-200 focus:border-blue-500 focus:ring-blue-500"
+                    placeholder="Ex: 100"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-400 mb-2">
+                    Valor Total (R$) *
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min="0.01"
+                    step="0.01"
+                    value={formData.valor_total || ''}
+                    onChange={(e) => setFormData({ ...formData, valor_total: parseFloat(e.target.value) || 0 })}
+                    disabled={isSaving}
+                    className="w-full px-4 py-2 rounded-md bg-slate-900 border border-slate-700 text-slate-200 focus:border-blue-500 focus:ring-blue-500"
+                    placeholder="Ex: 500.00"
+                  />
+                  {formData.quantidade_creditos > 0 && formData.valor_total > 0 && (
+                    <p className="text-xs text-slate-500 mt-1">
+                      Custo médio por crédito: {formatCurrency(formData.valor_total / formData.quantidade_creditos)}
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex space-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowForm(false);
+                      setError(null);
+                    }}
+                    disabled={isSaving}
+                    className="flex-1 px-4 py-2 text-sm font-medium text-white bg-slate-700 rounded-md hover:bg-slate-600 disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSaving}
+                    className="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isSaving ? 'Salvando...' : 'Salvar Compra'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+    </Layout>
+  );
+}
+

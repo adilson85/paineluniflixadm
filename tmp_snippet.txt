@@ -1,0 +1,9 @@
+          <select
+            className="border rounded-lg px-4 py-2"
+            value={painelFilter}
+            onChange={(e) => setPainelFilter(e.target.value)}
+          >
+            <option value="">Todos os Painéis</option>
+            {paineis.map(painel => (
+              <option key={painel} value={painel}>{painel}</option>
+            ))}

@@ -1,0 +1,52 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Arquivos de ambiente e configuração sensível
+.env
+.env.*
+!.env.example
+
+# Portal do Assinante (não incluir no painel ADM)
+Cliente Uniflix/
+
+# CRM Clientes
+CRM Clientes/
+
+# Scripts de teste com tokens sensíveis (raiz do projeto)
+*.js
+!vite.config.ts
+
+# Arquivos SQL
+*.sql
+
+# Supabase (opcional - descomente se não quiser versionar)
+# supabase/
+
+# Arquivos de documentação temporários
+*.md
+!README.md
+
+# Arquivos problemáticos do Windows
+nul
