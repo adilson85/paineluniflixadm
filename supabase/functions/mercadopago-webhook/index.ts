@@ -38,9 +38,121 @@ serve(async (req)=>{
     }
     // Cria cliente Supabase com service role (bypassa RLS)
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    // Lê o body da requisição
-    const body = await req.json();
+
+    // ============================================================
+    // VALIDAÇÃO DE ASSINATURA MERCADO PAGO
+    // ============================================================
+    // Extrai headers de segurança conforme documentação oficial:
+    // https://www.mercadopago.com.br/developers/pt/docs/your-integrations/notifications/webhooks
+    const xSignature = req.headers.get('x-signature');
+    const xRequestId = req.headers.get('x-request-id');
+
+    // Log dos headers recebidos (para debug)
+    console.log('🔐 Headers de segurança:', {
+      hasSignature: !!xSignature,
+      hasRequestId: !!xRequestId,
+      signature: xSignature ? xSignature.substring(0, 50) + '...' : 'null',
+      requestId: xRequestId
+    });
+
+    // Verifica se os headers obrigatórios estão presentes
+    if (!xSignature || !xRequestId) {
+      console.warn('⚠️ Webhook sem assinatura válida - rejeitado');
+      console.warn('   x-signature:', xSignature ? 'presente' : 'ausente');
+      console.warn('   x-request-id:', xRequestId ? 'presente' : 'ausente');
+
+      return new Response(JSON.stringify({
+        error: 'Assinatura inválida ou ausente'
+      }), {
+        status: 401,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+    }
+
+    // ============================================================
+    // VALIDAÇÃO HMAC-SHA256 (Mercado Pago Webhook Signature)
+    // ============================================================
+    // Documentação: https://www.mercadopago.com.br/developers/pt/docs/your-integrations/notifications/webhooks
+
+    // Lê o body como texto primeiro (necessário para validação HMAC)
+    const rawBody = await req.text();
+    const body = JSON.parse(rawBody);
     console.log('📥 Webhook recebido:', JSON.stringify(body, null, 2));
+
+    const webhookSecret = Deno.env.get('MERCADO_PAGO_WEBHOOK_SECRET');
+
+    if (webhookSecret) {
+      try {
+        // Extrai timestamp (ts) e hash (v1) do header x-signature
+        // Formato esperado: "ts=1234567890,v1=abc123..."
+        const parts = xSignature.split(',');
+        const tsMatch = parts.find(p => p.startsWith('ts='));
+        const v1Match = parts.find(p => p.startsWith('v1='));
+
+        if (!tsMatch || !v1Match) {
+          console.warn('⚠️ Formato de x-signature inválido');
+          return new Response(JSON.stringify({ error: 'Formato de assinatura inválido' }), {
+            status: 401,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        const timestamp = tsMatch.split('=')[1];
+        const receivedHash = v1Match.split('=')[1];
+        const dataId = body.data?.id;
+
+        if (!dataId) {
+          console.warn('⚠️ Webhook sem data.id');
+          return new Response(JSON.stringify({ error: 'data.id ausente' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        // Constrói manifest: "id:{data.id};request-id:{x-request-id};ts:{timestamp};"
+        const manifest = `id:${dataId};request-id:${xRequestId};ts:${timestamp};`;
+
+        // Gera HMAC-SHA256
+        const encoder = new TextEncoder();
+        const keyData = encoder.encode(webhookSecret);
+        const messageData = encoder.encode(manifest);
+
+        const cryptoKey = await crypto.subtle.importKey(
+          'raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+        );
+
+        const signature = await crypto.subtle.sign('HMAC', cryptoKey, messageData);
+        const hashArray = Array.from(new Uint8Array(signature));
+        const calculatedHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+        // Compara hashes (case-insensitive)
+        if (calculatedHash.toLowerCase() !== receivedHash.toLowerCase()) {
+          console.warn('⚠️ Assinatura HMAC inválida');
+          console.warn(`   Manifest: ${manifest}`);
+          console.warn(`   Calculado: ${calculatedHash}`);
+          console.warn(`   Recebido:  ${receivedHash}`);
+          return new Response(JSON.stringify({ error: 'Assinatura HMAC inválida' }), {
+            status: 401,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        console.log('✅ Assinatura HMAC validada com sucesso');
+
+      } catch (error) {
+        console.error('❌ Erro ao validar HMAC:', error);
+        return new Response(JSON.stringify({ error: 'Erro na validação de assinatura' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    } else {
+      console.warn('⚠️ MERCADO_PAGO_WEBHOOK_SECRET não configurado');
+      console.warn('   Usando apenas validação de headers + verificação via API MP');
+      console.warn('   Configure MERCADO_PAGO_WEBHOOK_SECRET para segurança completa');
+    }
     // Mercado Pago envia diferentes tipos de notificações
     // https://www.mercadopago.com.br/developers/pt/docs/your-integrations/notifications/webhooks
     if (body.type === 'payment') {
@@ -87,14 +199,34 @@ serve(async (req)=>{
         charged_back: 'failed'
       };
       const newStatus = statusMap[payment.status] || 'pending';
-      // Atualiza a transação no banco
+
+      // ============================================================
+      // PRESERVAÇÃO DE METADATA (CRÍTICO!)
+      // ============================================================
+      // Busca metadata EXISTENTE da transação para não sobrescrever
+      // promotion_id, duration_days, etc.
+      const { data: existingTransaction } = await supabase
+        .from('transactions')
+        .select('metadata')
+        .eq('id', transactionId)
+        .single();
+
+      const originalMetadata = existingTransaction?.metadata || {};
+
+      // Atualiza a transação PRESERVANDO metadata original
       const { error: updateError } = await supabase.from('transactions').update({
         status: newStatus,
         metadata: {
-          ...payment,
-          mercado_pago_id: payment.id,
-          mercado_pago_status: payment.status,
-          updated_at: new Date().toISOString()
+          ...originalMetadata,  // Preserva promotion_id, duration_days, etc.
+          mercado_pago: {       // Dados do MP em objeto separado
+            id: payment.id,
+            status: payment.status,
+            transaction_amount: payment.transaction_amount,
+            payment_method_id: payment.payment_method_id,
+            date_approved: payment.date_approved,
+            date_created: payment.date_created,
+            updated_at: new Date().toISOString()
+          }
         }
       }).eq('id', transactionId);
       if (updateError) {

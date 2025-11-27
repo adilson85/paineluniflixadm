@@ -15,22 +15,48 @@ serve(async (req) => {
   try {
     console.log('🚀 Iniciando create-payment-preference');
 
-    // Inicializa o cliente Supabase com o SERVICE_ROLE_KEY
+    // ============================================================
+    // VALIDAÇÃO DE AUTENTICAÇÃO VIA JWT
+    // ============================================================
+    // Extrai o token de autenticação do header
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      throw new Error('Não autenticado - header Authorization ausente');
+    }
+
+    // Cria cliente Supabase com contexto do usuário autenticado
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    // Valida e extrai usuário do JWT
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+    if (userError || !user) {
+      console.error('❌ Token JWT inválido:', userError);
+      throw new Error('Token inválido ou expirado');
+    }
+
+    // Usa user.id extraído do JWT (não do body!)
+    const userId = user.id;
+    console.log('✅ Usuário autenticado:', { userId: userId.substring(0, 8) + '...' });
+
+    // Inicializa cliente admin para operações privilegiadas
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Pega o body da requisição
+    // Pega o body da requisição (SEM userId - vem do JWT)
     const body = await req.json();
     console.log('📦 Body recebido:', {
       hasTransactionId: !!body.transactionId,
-      hasUserId: !!body.userId,
       amount: body.amount,
       paymentMethod: body.paymentMethod
     });
 
-    const { transactionId, userId, amount, description, paymentMethod, metadata } = body;
+    const { transactionId, amount, description, paymentMethod, metadata } = body;
 
     if (!transactionId || !userId || !amount || !description) {
       throw new Error('Parâmetros obrigatórios faltando');
@@ -54,11 +80,12 @@ serve(async (req) => {
     }
 
     // URLs de retorno
+    // IMPORTANTE: Usar /payment/success (com barra) para compatibilidade com App.tsx
     const baseUrl = Deno.env.get('CLIENT_URL') || 'http://localhost:5173';
     const backUrls = {
-      success: `${baseUrl}/payment-success?transaction_id=${transactionId}`,
-      failure: `${baseUrl}/payment-failure?transaction_id=${transactionId}`,
-      pending: `${baseUrl}/payment-success?transaction_id=${transactionId}`,
+      success: `${baseUrl}/payment/success?transaction_id=${transactionId}`,
+      failure: `${baseUrl}/payment/failure?transaction_id=${transactionId}`,
+      pending: `${baseUrl}/payment/success?transaction_id=${transactionId}`,
     };
 
     // Cria a preferência no Mercado Pago
