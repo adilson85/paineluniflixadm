@@ -38,16 +38,23 @@ serve(async (req) => {
       throw new Error('Token inválido');
     }
 
-    // Verificar se é admin
+    // Verificar se é admin usando a função RPC is_admin
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    const { data: userData, error: userError } = await supabaseAdmin
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single();
+    // Criar cliente com o token do usuário para usar is_admin()
+    const supabaseWithAuth = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: {
+        headers: {
+          Authorization: authHeader,
+        },
+      },
+    });
 
-    if (userError || userData?.role !== 'admin') {
+    const { data: isAdmin, error: adminCheckError } = await supabaseWithAuth
+      .rpc('is_admin');
+
+    if (adminCheckError || !isAdmin) {
+      console.error('Admin check failed:', adminCheckError, 'isAdmin:', isAdmin);
       throw new Error('Acesso negado. Apenas administradores podem criar outros administradores.');
     }
 
