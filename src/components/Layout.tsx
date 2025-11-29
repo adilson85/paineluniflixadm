@@ -27,7 +27,14 @@ export default function Layout({ children }: LayoutProps) {
         } transition-transform duration-200 ease-in-out md:translate-x-0 md:relative md:inset-auto md:transform-none md:h-screen`}
       >
         <div className="flex items-center justify-center h-16 px-4 bg-slate-900 border-b border-slate-800">
-          <h1 className="text-xl font-bold text-slate-100">Uniflix TV CRM</h1>
+          <div className="flex items-center gap-3">
+            <img 
+              src="/uniflixtv.svg" 
+              alt="Uniflix Logo" 
+              className="h-8 w-auto object-contain"
+            />
+            <h1 className="text-xl font-bold text-slate-100">Uniflix</h1>
+          </div>
         </div>
         <nav className="mt-6">
           <Link

@@ -76,10 +76,15 @@ export default function Login() {
       <div className="min-h-screen flex items-center justify-center bg-gray-100 py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900">
-              Uniflix TV
-            </h1>
-            <p className="mt-2 text-gray-600">
+            {/* Logo */}
+            <div className="flex justify-center mb-6">
+              <img 
+                src="/uniflixtv.svg" 
+                alt="Uniflix TV Logo" 
+                className="h-32 w-auto object-contain"
+              />
+            </div>
+            <p className="text-gray-600">
               Recuperar senha
             </p>
           </div>
@@ -169,10 +174,15 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center bg-gray-100 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">
-            Uniflix TV
-          </h1>
-          <p className="mt-2 text-gray-600">
+          {/* Logo */}
+          <div className="flex justify-center mb-6">
+            <img 
+              src="/uniflixtv.svg" 
+              alt="Uniflix TV Logo" 
+              className="h-32 w-auto object-contain"
+            />
+          </div>
+          <p className="text-gray-600">
             Área administrativa
           </p>
         </div>
