@@ -103,26 +103,39 @@ export default function Configuracoes() {
     try {
       setError(null);
 
-      // Criar administrador via RPC
-      const { data: userId, error: createError } = await supabase
-        .rpc('create_admin_user', {
-          p_email: newAdmin.email,
-          p_password: newAdmin.password,
-          p_full_name: newAdmin.full_name,
-          p_phone: newAdmin.phone || null
-        });
+      // Obter sessão atual
+      const { data: { session } } = await supabase.auth.getSession();
 
-      if (createError) {
-        console.error('Error creating admin:', createError);
-        throw createError;
+      if (!session) {
+        throw new Error('Sessão expirada. Faça login novamente.');
       }
 
-      if (!userId) {
-        throw new Error('Erro ao criar administrador: ID não retornado');
+      // Criar administrador via Edge Function
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-admin`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email: newAdmin.email,
+            password: newAdmin.password,
+            full_name: newAdmin.full_name,
+            phone: newAdmin.phone || null,
+          }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Erro ao criar administrador');
       }
 
       // Sucesso!
-      console.log('Admin criado com sucesso:', userId);
+      console.log('Admin criado com sucesso:', result.user_id);
 
       // Fechar modal e limpar formulário
       setShowAddModal(false);
@@ -135,8 +148,8 @@ export default function Configuracoes() {
       console.error('Error creating admin:', err);
       if (err.message?.includes('já está cadastrado') || err.message?.includes('already registered') || err.message?.includes('duplicate')) {
         setError('Este email já está cadastrado.');
-      } else if (err.code === '42883') {
-        setError('Função de criação não encontrada. Verifique se as migrações foram executadas.');
+      } else if (err.message?.includes('Acesso negado')) {
+        setError('Acesso negado. Apenas administradores podem criar outros administradores.');
       } else {
         setError(err.message || 'Erro ao criar administrador. Verifique os dados e tente novamente.');
       }
