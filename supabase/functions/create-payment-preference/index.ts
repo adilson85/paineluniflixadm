@@ -4,72 +4,87 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
 serve(async (req) => {
-  // Handle CORS preflight requests
+  // Preflight CORS
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, {
+      headers: corsHeaders,
+    });
   }
 
   try {
     console.log('🚀 Iniciando create-payment-preference');
 
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+
+    if (!supabaseUrl || !anonKey || !serviceRoleKey) {
+      throw new Error('Variáveis SUPABASE_URL / SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY não configuradas');
+    }
+
     // ============================================================
-    // VALIDAÇÃO DE AUTENTICAÇÃO VIA JWT
+    // 1) Autenticação via JWT (cliente sempre autenticado)
     // ============================================================
-    // Extrai o token de autenticação do header
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       throw new Error('Não autenticado - header Authorization ausente');
     }
 
-    // Cria cliente Supabase com contexto do usuário autenticado
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } }
-    );
+    // Extrai o token JWT do header "Bearer <token>"
+    const token = authHeader.replace('Bearer ', '');
 
-    // Valida e extrai usuário do JWT
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
-    if (userError || !user) {
-      console.error('❌ Token JWT inválido:', userError);
+    // Cria cliente Supabase para validar o JWT
+    const supabaseClient = createClient(supabaseUrl, anonKey);
+
+    // Valida o JWT token diretamente (Edge Functions não têm sessão!)
+    const {
+      data: { user },
+      error: userAuthError,
+    } = await supabaseClient.auth.getUser(token);
+
+    if (userAuthError || !user) {
+      console.error('❌ Token JWT inválido:', userAuthError);
       throw new Error('Token inválido ou expirado');
     }
 
-    // Usa user.id extraído do JWT (não do body!)
     const userId = user.id;
-    console.log('✅ Usuário autenticado:', { userId: userId.substring(0, 8) + '...' });
+    console.log('✅ Usuário autenticado:', userId.substring(0, 8) + '...');
 
-    // Inicializa cliente admin para operações privilegiadas
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
+    // Cliente admin para ler dados privilegiados
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
-    // Pega o body da requisição (SEM userId - vem do JWT)
+    // ============================================================
+    // 2) Body da requisição (userId vem do JWT, não do body)
+    // ============================================================
     const body = await req.json();
     console.log('📦 Body recebido:', {
       hasTransactionId: !!body.transactionId,
       amount: body.amount,
-      paymentMethod: body.paymentMethod
+      paymentMethod: body.paymentMethod,
     });
 
     const { transactionId, amount, description, paymentMethod, metadata } = body;
 
-    if (!transactionId || !userId || !amount || !description) {
-      throw new Error('Parâmetros obrigatórios faltando');
+    if (!transactionId || !amount || !description) {
+      throw new Error('Parâmetros obrigatórios faltando (transactionId, amount, description)');
     }
 
-    // Obtém o Access Token do Mercado Pago das variáveis de ambiente
+    // ============================================================
+    // 3) Token Mercado Pago
+    // ============================================================
     const mercadoPagoAccessToken = Deno.env.get('MERCADO_PAGO_ACCESS_TOKEN');
     if (!mercadoPagoAccessToken) {
-      throw new Error('Token do Mercado Pago não configurado');
+      throw new Error('Token do Mercado Pago não configurado (MERCADO_PAGO_ACCESS_TOKEN)');
     }
 
-    // Obtém dados do usuário para enviar no pagamento
-    const { data: user, error: userError } = await supabaseAdmin
+    // ============================================================
+    // 4) Dados do usuário (tabela users)
+    // ============================================================
+    const { data: userRow, error: userError } = await supabaseAdmin
       .from('users')
       .select('full_name, email, phone')
       .eq('id', userId)
@@ -79,38 +94,49 @@ serve(async (req) => {
       console.error('Erro ao buscar usuário:', userError);
     }
 
-    // URLs de retorno
-    // IMPORTANTE: Usar /payment/success (com barra) para compatibilidade com App.tsx
+    // ============================================================
+    // 5) URLs de retorno (front)
+    // ============================================================
     const baseUrl = Deno.env.get('CLIENT_URL') || 'http://localhost:5173';
+
     const backUrls = {
       success: `${baseUrl}/payment/success?transaction_id=${transactionId}`,
       failure: `${baseUrl}/payment/failure?transaction_id=${transactionId}`,
       pending: `${baseUrl}/payment/success?transaction_id=${transactionId}`,
     };
 
-    // Cria a preferência no Mercado Pago
-    const preferenceData = {
+    // ============================================================
+    // 6) URL do webhook (Edge Function)
+    //    Usa URL do projeto Supabase + /functions/v1/mercadopago-webhook
+    // ============================================================
+    const functionsWebhookUrl =
+      `${supabaseUrl}/functions/v1/mercadopago-webhook`.replace(/\/+$/, '');
+
+    // ============================================================
+    // 7) Monta preferenceData
+    // ============================================================
+    const preferenceData: any = {
       items: [
         {
           id: transactionId,
           title: description,
-          description: description,
+          description,
           quantity: 1,
           currency_id: 'BRL',
           unit_price: amount,
         },
       ],
       payer: {
-        name: user?.full_name || '',
-        email: user?.email || '',
+        name: userRow?.full_name || '',
+        email: userRow?.email || '',
         phone: {
-          number: user?.phone || '',
+          number: userRow?.phone || '',
         },
       },
       back_urls: backUrls,
       auto_return: 'approved',
       external_reference: transactionId,
-      notification_url: `${Deno.env.get('SUPABASE_URL')}/functions/v1/mercadopago-webhook`,
+      notification_url: functionsWebhookUrl,
       metadata: {
         transaction_id: transactionId,
         user_id: userId,
@@ -123,7 +149,7 @@ serve(async (req) => {
       },
     };
 
-    // Ajusta métodos de pagamento baseado na escolha do usuário
+    // Regras por método de pagamento
     if (paymentMethod === 'pix') {
       preferenceData.payment_methods.excluded_payment_types = [
         { id: 'credit_card' },
@@ -131,9 +157,7 @@ serve(async (req) => {
         { id: 'ticket' },
       ];
     } else if (paymentMethod === 'credit_card') {
-      preferenceData.payment_methods.excluded_payment_types = [
-        { id: 'ticket' },
-      ];
+      preferenceData.payment_methods.excluded_payment_types = [{ id: 'ticket' }];
     } else if (paymentMethod === 'boleto') {
       preferenceData.payment_methods.excluded_payment_types = [
         { id: 'credit_card' },
@@ -147,12 +171,14 @@ serve(async (req) => {
       paymentMethod,
     });
 
-    // Faz a requisição para a API do Mercado Pago
+    // ============================================================
+    // 8) Chamada à API do Mercado Pago
+    // ============================================================
     const response = await fetch('https://api.mercadopago.com/checkout/preferences', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${mercadoPagoAccessToken}`,
+        Authorization: `Bearer ${mercadoPagoAccessToken}`,
       },
       body: JSON.stringify(preferenceData),
     });
@@ -181,21 +207,27 @@ serve(async (req) => {
         },
       }),
       {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json',
+        },
         status: 200,
-      }
+      },
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Erro na Edge Function:', error);
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message,
+        error: error?.message ?? 'Erro desconhecido',
       }),
       {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json',
+        },
         status: 400,
-      }
+      },
     );
   }
 });

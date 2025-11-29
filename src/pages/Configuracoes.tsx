@@ -103,8 +103,8 @@ export default function Configuracoes() {
     try {
       setError(null);
 
-      // Validar via RPC primeiro
-      const { error: validateError } = await supabase
+      // Criar administrador via RPC
+      const { data: userId, error: createError } = await supabase
         .rpc('create_admin_user', {
           p_email: newAdmin.email,
           p_password: newAdmin.password,
@@ -112,25 +112,33 @@ export default function Configuracoes() {
           p_phone: newAdmin.phone || null
         });
 
-      if (validateError) {
-        // Se a função não existir, continuar mesmo assim
-        console.warn('RPC validation failed, continuing with direct creation');
+      if (createError) {
+        console.error('Error creating admin:', createError);
+        throw createError;
       }
 
-      // Nota: A criação real de usuário admin deve ser feita via Supabase Dashboard
-      // ou via API server-side, pois supabase.auth.admin não está disponível no cliente
-      // Por enquanto, vamos mostrar uma mensagem instruindo o usuário
-      setError('Para criar um administrador, use o Supabase Dashboard ou execute o SQL manualmente. Veja a documentação.');
-      
-      // TODO: Implementar criação via API server-side quando disponível
-      // Por enquanto, vamos apenas validar e mostrar instruções
-      
+      if (!userId) {
+        throw new Error('Erro ao criar administrador: ID não retornado');
+      }
+
+      // Sucesso!
+      console.log('Admin criado com sucesso:', userId);
+
+      // Fechar modal e limpar formulário
+      setShowAddModal(false);
+      setNewAdmin({ email: '', password: '', full_name: '', phone: '' });
+
+      // Recarregar lista de administradores
+      await fetchAdmins();
+
     } catch (err: any) {
       console.error('Error creating admin:', err);
-      if (err.message?.includes('já está cadastrado') || err.message?.includes('already registered')) {
+      if (err.message?.includes('já está cadastrado') || err.message?.includes('already registered') || err.message?.includes('duplicate')) {
         setError('Este email já está cadastrado.');
+      } else if (err.code === '42883') {
+        setError('Função de criação não encontrada. Verifique se as migrações foram executadas.');
       } else {
-        setError('Erro ao criar administrador. Use o Supabase Dashboard para criar administradores.');
+        setError(err.message || 'Erro ao criar administrador. Verifique os dados e tente novamente.');
       }
     }
   };
