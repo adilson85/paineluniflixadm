@@ -2,6 +2,7 @@ import { Users, Search, Filter, DollarSign, X } from 'lucide-react';
 import { useState } from 'react';
 import type { Referral } from '../hooks/useClientReferrals';
 import { formatDateBR } from '../../../utils/dateUtils';
+import { formatPhone } from '../../../utils/clientHelpers';
 
 interface ClientReferralsProps {
   referrals: Referral[];
@@ -138,7 +139,7 @@ export function ClientReferrals({
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <div className="text-sm text-slate-400">
-                        {referral.referred_user?.phone || referral.referred_user?.email || '-'}
+                        {referral.referred_user?.phone ? formatPhone(referral.referred_user.phone) : (referral.referred_user?.email || '-')}
                       </div>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">

@@ -4,6 +4,7 @@ import Layout from '../components/Layout';
 import { supabase } from '../lib/supabase';
 import type { TesteLiberado } from '../types';
 import { formatDateBR } from '../utils/dateUtils';
+import { formatPhone } from '../utils/clientHelpers';
 
 export default function TestesLiberados() {
   const [testes, setTestes] = useState<TesteLiberado[]>([]);
@@ -606,7 +607,7 @@ export default function TestesLiberados() {
                   onClick={() => handleEditClick(teste)}
                 >
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-100">{teste.nome}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{teste.telefone}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{teste.telefone ? formatPhone(teste.telefone) : '-'}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{teste.usuario1}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{teste.senha1}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{teste.painel1}</td>

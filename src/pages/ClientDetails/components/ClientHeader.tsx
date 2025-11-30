@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Monitor, Edit2, Plus, DollarSign, Users, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Monitor, Edit2, Plus, DollarSign, Users, CheckCircle, MessageCircle } from 'lucide-react';
 import type { Client } from '../../../types';
+import { formatPhone } from '../../../utils/clientHelpers';
 
 interface ClientHeaderProps {
   client: Client;
@@ -33,6 +34,11 @@ export function ClientHeader({
       default:
         return 'bg-slate-700/50 text-slate-300 border border-slate-600';
     }
+  };
+
+  const getBotConversaLink = (telefone: string) => {
+    const cleanPhone = telefone.replace(/\D/g, '');
+    return `https://app.botconversa.com.br/24872/live-chat/all/+55${cleanPhone}`;
   };
 
   return (
@@ -81,7 +87,16 @@ export function ClientHeader({
             {client.telefone && (
               <div>
                 <span className="text-slate-400">Telefone:</span>
-                <span className="ml-2 text-slate-200 font-medium">{client.telefone}</span>
+                <span className="ml-2 text-slate-200 font-medium">{formatPhone(client.telefone)}</span>
+                <a
+                  href={getBotConversaLink(client.telefone)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="ml-2 text-blue-400 hover:text-blue-300 inline-flex"
+                  title="Abrir no BotConversa"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                </a>
               </div>
             )}
             {client.email && (

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { X, CheckCircle, XCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { formatPhone } from '../../utils/clientHelpers';
 
 interface WithdrawalRequest {
   id: string;
@@ -214,7 +215,7 @@ export function ApproveWithdrawalModal({ withdrawal, onClose }: ApproveWithdrawa
                   <strong>Nome:</strong> {withdrawal.users?.full_name}
                 </p>
                 <p className="text-gray-600">
-                  <strong>Telefone:</strong> {withdrawal.users?.phone || 'Não informado'}
+                  <strong>Telefone:</strong> {withdrawal.users?.phone ? formatPhone(withdrawal.users.phone) : 'Não informado'}
                 </p>
               </div>
               <div>

@@ -96,7 +96,6 @@ serve(async (req) => {
         email,
         full_name,
         phone: phone || null,
-        role: 'admin',
       });
 
     if (insertError) {

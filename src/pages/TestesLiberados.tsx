@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Search, Filter, CalendarDays, Plus, X } from 'lucide-react';
 import Layout from '../components/Layout';
 import { supabase } from '../lib/supabase';
 import type { TesteLiberado } from '../types';
+import { formatPhone } from '../utils/clientHelpers';
 
 export default function TestesLiberados() {
   const [testes, setTestes] = useState<TesteLiberado[]>([]);
@@ -77,6 +78,12 @@ export default function TestesLiberados() {
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('pt-BR');
+  };
+
+  const formatMonth = (monthKey: string) => {
+    if (monthKey === 'Total Geral') return monthKey;
+    const [year, month] = monthKey.split('-');
+    return new Date(parseInt(year), parseInt(month) - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
   };
 
   return (
@@ -205,7 +212,7 @@ export default function TestesLiberados() {
                     {teste.nome}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {teste.telefone}
+                    {teste.telefone ? formatPhone(teste.telefone) : '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {teste.usuario1}

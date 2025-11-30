@@ -3,6 +3,7 @@ import { Users, Plus, Edit2, X, Check, CreditCard, Search, Filter, Monitor } fro
 import Layout from '../components/Layout';
 import { supabase } from '../lib/supabase';
 import type { Reseller, ResellerPanel, ResellerWithPanels, ResellerPricing } from '../types';
+import { formatPhone } from '../utils/clientHelpers';
 
 export default function Revendedores() {
   const [resellers, setResellers] = useState<ResellerWithPanels[]>([]);
@@ -454,7 +455,7 @@ export default function Revendedores() {
                   <h3 className="text-xl font-semibold text-slate-100">{reseller.name}</h3>
                   <div className="mt-2 space-y-1 text-sm text-slate-400">
                     {reseller.email && <p>Email: {reseller.email}</p>}
-                    {reseller.phone && <p>Telefone: {reseller.phone}</p>}
+                    {reseller.phone && <p>Telefone: {formatPhone(reseller.phone)}</p>}
                     {reseller.cpf && <p>CPF: {reseller.cpf}</p>}
                   </div>
                 </div>

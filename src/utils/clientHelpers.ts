@@ -195,16 +195,27 @@ export function formatCPF(cpf: string): string {
 
 /**
  * Formata um telefone para exibição
+ * Remove DDI (55) e exibe apenas no formato brasileiro (DDD) 99999-9999
  */
 export function formatPhone(phone: string): string {
+  // Remove caracteres não numéricos
   phone = phone.replace(/\D/g, '');
 
+  // Remove DDI 55 se existir (telefone com 13 dígitos = 55 + DDD + número)
+  if (phone.length === 13 && phone.startsWith('55')) {
+    phone = phone.substring(2);
+  }
+
+  // Formata: (DDD) 99999-9999
   if (phone.length === 11) {
     return phone.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
-  } else if (phone.length === 10) {
+  }
+  // Formata: (DDD) 9999-9999 (números antigos sem 9)
+  else if (phone.length === 10) {
     return phone.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
   }
 
+  // Retorna original se não tiver formato reconhecido
   return phone;
 }
 

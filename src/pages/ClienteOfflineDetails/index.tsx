@@ -111,9 +111,9 @@ export default function ClienteOfflineDetails() {
     }
   };
 
-  const getWhatsAppLink = (telefone: string) => {
+  const getBotConversaLink = (telefone: string) => {
     const cleanPhone = telefone.replace(/\D/g, '');
-    return `https://wa.me/55${cleanPhone}`;
+    return `https://app.botconversa.com.br/24872/live-chat/all/+55${cleanPhone}`;
   };
 
   // Carregar opções de recarga
@@ -289,11 +289,11 @@ export default function ClienteOfflineDetails() {
                       {formatPhone(client.telefone)}
                     </span>
                     <a
-                      href={getWhatsAppLink(client.telefone)}
+                      href={getBotConversaLink(client.telefone)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="ml-2 text-green-400 hover:text-green-300 inline-flex"
-                      title="Enviar WhatsApp"
+                      className="ml-2 text-blue-400 hover:text-blue-300 inline-flex"
+                      title="Abrir no BotConversa"
                     >
                       <MessageCircle className="w-4 h-4" />
                     </a>

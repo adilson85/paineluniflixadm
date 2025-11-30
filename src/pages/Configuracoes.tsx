@@ -3,6 +3,7 @@ import { Settings, Plus, Edit2, X, Check, UserPlus, Shield } from 'lucide-react'
 import Layout from '../components/Layout';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { formatPhone } from '../utils/clientHelpers';
 
 interface AdminUser {
   id: string;
@@ -256,7 +257,7 @@ export default function Configuracoes() {
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-slate-300">{admin.email}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-slate-300">{admin.phone || '-'}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-slate-300">{admin.phone ? formatPhone(admin.phone) : '-'}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-slate-300">
                     {new Date(admin.created_at).toLocaleDateString('pt-BR')}
                   </td>

@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Search, Filter, Phone, ExternalLink, Users, Plus, X } from 'lucide-react';
+import { Search, Filter, ExternalLink, Users, Plus, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { supabase } from '../lib/supabase';
 import type { Client, User, Subscription } from '../types';
-import { transformUserToClient, getPlanType } from '../utils/clientHelpers';
+import { transformUserToClient, getPlanType, formatPhone } from '../utils/clientHelpers';
 import { formatDateBR } from '../utils/dateUtils';
 
 export default function Clientes() {
@@ -120,14 +120,6 @@ export default function Clientes() {
     return matchesSearch && matchesStatus;
   });
 
-
-  const openWhatsApp = (phone: string) => {
-    if (!phone) return;
-    const formattedPhone = phone.replace(/\D/g, '');
-    const message = encodeURIComponent('Olá, tudo bem? Aqui é da Uniflix TV.');
-    window.open(`https://wa.me/${formattedPhone}?text=${message}`, '_blank');
-  };
-
   return (
     <Layout>
       <div className="mb-6 flex justify-between items-center">
@@ -189,16 +181,14 @@ export default function Clientes() {
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Status</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Plano</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Data de Expiração</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Valor</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">E-mail</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">CPF</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Ações</th>
             </tr>
           </thead>
           <tbody className="bg-slate-800 divide-y divide-slate-700">
             {loading ? (
               <tr>
-                <td colSpan={9} className="px-6 py-4 text-center text-slate-300">
+                <td colSpan={7} className="px-6 py-4 text-center text-slate-300">
                   <div className="flex items-center justify-center">
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
                     <span className="ml-2">Carregando...</span>
@@ -207,7 +197,7 @@ export default function Clientes() {
               </tr>
             ) : filteredClients.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-6 py-4 text-center text-slate-300">
+                <td colSpan={7} className="px-6 py-4 text-center text-slate-300">
                   Nenhum cliente encontrado
                 </td>
               </tr>
@@ -225,7 +215,7 @@ export default function Clientes() {
                         <ExternalLink className="h-4 w-4 ml-1" />
                       </Link>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-slate-300">{client.telefone || '-'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-slate-300">{client.telefone ? formatPhone(client.telefone) : '-'}</td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span
                         className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
@@ -257,22 +247,8 @@ export default function Clientes() {
                     <td className="px-6 py-4 whitespace-nowrap text-slate-300">
                       {client.data_expiracao ? formatDateBR(client.data_expiracao) : '-'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-slate-300">
-                      {client.valor ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(client.valor) : '-'}
-                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-slate-300">{client.email || '-'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-slate-300">{client.cpf || '-'}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {client.telefone && (
-                        <button
-                          onClick={() => openWhatsApp(client.telefone)}
-                          className="text-blue-400 hover:text-blue-300"
-                          title="Enviar mensagem no WhatsApp"
-                        >
-                          <Phone className="h-5 w-5" />
-                        </button>
-                      )}
-                    </td>
                   </tr>
                 );
               })

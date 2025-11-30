@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { DollarSign, Clock, CheckCircle, XCircle, Eye } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { ApproveWithdrawalModal } from './modals/ApproveWithdrawalModal';
+import { formatPhone } from '../utils/clientHelpers';
 
 interface WithdrawalRequest {
   id: string;
@@ -184,7 +185,7 @@ export function PendingWithdrawals() {
                           <div>
                             {withdrawal.users?.phone && (
                               <p className="text-slate-300">
-                                <strong>Telefone:</strong> {withdrawal.users.phone}
+                                <strong>Telefone:</strong> {formatPhone(withdrawal.users.phone)}
                               </p>
                             )}
                             {withdrawal.users?.email && (

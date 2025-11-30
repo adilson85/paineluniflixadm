@@ -2,6 +2,7 @@ import { X, ArrowRight, AlertCircle } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import type { OfflineClient } from '../../types';
 import { canMigrateOfflineClient } from '../../utils/offlineClientHelpers';
+import { formatPhone } from '../../utils/clientHelpers';
 
 interface MigrarClienteOfflineModalProps {
   isOpen: boolean;
@@ -98,7 +99,7 @@ export function MigrarClienteOfflineModal({
               </div>
               <div>
                 <span className="text-slate-400">Telefone:</span>
-                <span className="ml-2 text-slate-200 font-medium">{client.telefone}</span>
+                <span className="ml-2 text-slate-200 font-medium">{formatPhone(client.telefone)}</span>
               </div>
               {client.cpf && (
                 <div>
