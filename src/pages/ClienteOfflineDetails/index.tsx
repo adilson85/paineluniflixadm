@@ -9,7 +9,7 @@ import { useOfflineClientData } from './hooks/useOfflineClientData';
 import { useOfflineClientMigration } from './hooks/useOfflineClientMigration';
 import { useOfflineClientTransactions, type RechargeOption } from './hooks/useOfflineClientTransactions';
 import { getOfflineClientPlanType, getDaysUntilExpiration, countOfflineClientLogins } from '../../utils/offlineClientHelpers';
-import { formatCurrency, formatDate, formatCPF, formatPhone, transformOfflineClientToClient } from '../../utils/clientHelpers';
+import { formatCurrency, formatDate, formatCPF, formatPhone, transformOfflineClientToClient, getBotConversaLink } from '../../utils/clientHelpers';
 import { supabase } from '../../lib/supabase';
 import {
   ArrowLeft,
@@ -113,11 +113,6 @@ export default function ClienteOfflineDetails() {
       default:
         return 'bg-slate-700/50 text-slate-300 border border-slate-600';
     }
-  };
-
-  const getBotConversaLink = (telefone: string) => {
-    const cleanPhone = telefone.replace(/\D/g, '');
-    return `https://app.botconversa.com.br/24872/live-chat/all/+55${cleanPhone}`;
   };
 
   // Carregar opções de recarga

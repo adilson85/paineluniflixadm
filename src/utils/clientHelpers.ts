@@ -220,6 +220,80 @@ export function formatPhone(phone: string): string {
 }
 
 /**
+ * Formata um telefone para o padrão do BotConversa
+ * O BotConversa usa o mesmo padrão do WhatsApp:
+ * - Alguns DDDs usam apenas 8 dígitos (sem o nono dígito)
+ * - Outros DDDs usam 9 dígitos (com o nono dígito)
+ */
+export function formatPhoneForBotConversa(telefone: string): string {
+  const ddi = '+55';
+  
+  // Remove caracteres não numéricos
+  let phone = telefone.replace(/\D/g, '');
+  
+  // Remove o DDI se já estiver presente
+  if (phone.startsWith('55') && phone.length > 11) {
+    phone = phone.substring(2);
+  }
+  
+  let ddd: string;
+  let numero: string;
+  
+  // Verifica o comprimento do número para determinar se o DDD está presente
+  if (phone.length === 8) {
+    // Sem DDD - adiciona o DDD padrão 47
+    ddd = '47';
+    numero = phone;
+  } else if (phone.length === 9) {
+    // Apenas número com 9 dígitos - adiciona DDD padrão 47
+    ddd = '47';
+    numero = phone;
+  } else if (phone.length >= 10) {
+    // Com DDD
+    ddd = phone.slice(0, 2);
+    numero = phone.slice(2);
+  } else {
+    // Número inválido - retorna como está
+    return ddi + phone;
+  }
+  
+  // Lista de DDDs que requerem o nono dígito (celulares com 9 na frente)
+  // Basicamente todos os DDDs EXCETO os de SC (47, 48, 49), PR (41-46) e RS (51, 53, 54, 55)
+  const dddsComNonoDigito = [
+    '11', '12', '13', '14', '15', '16', '17', '18', '19', // São Paulo
+    '21', '22', '24', // Rio de Janeiro
+    '27', '28', // Espírito Santo
+    '31', '32', '33', '34', '35', '37', '38', // Minas Gerais
+    '61', '62', '63', '64', '65', '66', '67', '68', '69', // Centro-Oeste e Norte
+    '71', '73', '74', '75', '77', '79', // Bahia e Sergipe
+    '81', '82', '83', '84', '85', '86', '87', '88', '89', // Nordeste
+    '91', '92', '93', '94', '95', '96', '97', '98', '99'  // Norte
+  ];
+  
+  if (dddsComNonoDigito.includes(ddd)) {
+    // DDD que requer 9 dígitos - adiciona o 9 se não tiver
+    if (numero.length === 8) {
+      numero = '9' + numero;
+    }
+  } else {
+    // DDD que NÃO requer 9 dígitos (SC, PR, RS) - remove o 9 se tiver
+    if (numero.length === 9 && numero.startsWith('9')) {
+      numero = numero.substring(1);
+    }
+  }
+  
+  return ddi + ddd + numero;
+}
+
+/**
+ * Gera o link do BotConversa para um telefone
+ */
+export function getBotConversaLink(telefone: string): string {
+  const phoneFormatted = formatPhoneForBotConversa(telefone);
+  return `https://app.botconversa.com.br/24872/live-chat/all/${phoneFormatted}`;
+}
+
+/**
  * Transforma um cliente offline para o formato Client
  */
 export function transformOfflineClientToClient(offlineClient: OfflineClient): Client {

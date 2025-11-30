@@ -224,3 +224,4 @@ Você pode configurar no N8N para executar esta função periodicamente (ex: dia
 - **Correção manual**: Quando identificar subscriptions vazias manualmente, usar para limpar
 - **Manutenção preventiva**: Evitar erros futuros no sistema
 
+

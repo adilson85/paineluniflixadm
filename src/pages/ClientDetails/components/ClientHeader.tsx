@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Monitor, Edit2, Plus, DollarSign, Users, CheckCircle, MessageCircle, Trash2 } from 'lucide-react';
 import type { Client } from '../../../types';
-import { formatPhone } from '../../../utils/clientHelpers';
+import { formatPhone, getBotConversaLink } from '../../../utils/clientHelpers';
 
 interface ClientHeaderProps {
   client: Client;
@@ -36,11 +36,6 @@ export function ClientHeader({
       default:
         return 'bg-slate-700/50 text-slate-300 border border-slate-600';
     }
-  };
-
-  const getBotConversaLink = (telefone: string) => {
-    const cleanPhone = telefone.replace(/\D/g, '');
-    return `https://app.botconversa.com.br/24872/live-chat/all/+55${cleanPhone}`;
   };
 
   return (

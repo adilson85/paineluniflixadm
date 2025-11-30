@@ -103,3 +103,4 @@ No N8N, use o nó **HTTP Request**:
 2. **Dry Run**: Sempre use `dryRun: true` primeiro para verificar o que será excluído
 3. **Backup**: Considere fazer backup antes de excluir testes importantes
 
+
