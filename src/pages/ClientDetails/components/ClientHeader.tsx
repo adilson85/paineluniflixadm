@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Monitor, Edit2, Plus, DollarSign, Users, CheckCircle, MessageCircle } from 'lucide-react';
+import { ArrowLeft, Monitor, Edit2, Plus, DollarSign, Users, CheckCircle, MessageCircle, Trash2 } from 'lucide-react';
 import type { Client } from '../../../types';
 import { formatPhone } from '../../../utils/clientHelpers';
 
@@ -7,6 +7,7 @@ interface ClientHeaderProps {
   client: Client;
   onAddCredits: () => void;
   onEditProfile: () => void;
+  onDelete: () => void;
   totalCommission: number;
   totalReferrals: number;
   subscribersCount: number;
@@ -17,6 +18,7 @@ export function ClientHeader({
   client,
   onAddCredits,
   onEditProfile,
+  onDelete,
   totalCommission,
   totalReferrals,
   subscribersCount,
@@ -67,6 +69,13 @@ export function ClientHeader({
           >
             <Edit2 className="w-4 h-4 mr-2" />
             Editar Dados
+          </button>
+          <button
+            onClick={onDelete}
+            className="flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+          >
+            <Trash2 className="w-4 h-4 mr-2" />
+            Excluir Cliente
           </button>
         </div>
       </div>

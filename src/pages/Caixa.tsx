@@ -36,7 +36,8 @@ export default function Caixa() {
       const { data, error: supabaseError } = await supabase
         .from('caixa_movimentacoes')
         .select('*')
-        .order('data', { ascending: false });
+        .order('data', { ascending: false })
+        .order('id', { ascending: false });
 
       if (supabaseError) throw supabaseError;
 
@@ -188,23 +189,38 @@ export default function Caixa() {
     return { start, end };
   };
 
-  const filteredMovimentacoes = movimentacoes.filter(mov => {
-    const matchesSearch = mov.historico?.toLowerCase().includes(searchTerm.toLowerCase()) || false;
+  const filteredMovimentacoes = movimentacoes
+    .filter(mov => {
+      const matchesSearch = mov.historico?.toLowerCase().includes(searchTerm.toLowerCase()) || false;
 
-    // Filtro de período
-    const { start, end } = getDateRange();
-    let matchesPeriod = true;
+      // Filtro de período
+      const { start, end } = getDateRange();
+      let matchesPeriod = true;
 
-    if (start && end) {
-      // Extrai apenas a parte da data (YYYY-MM-DD) para evitar problemas de timezone
-      const dateOnly = mov.data.split('T')[0];
-      const [year, month, day] = dateOnly.split('-').map(Number);
-      const movDate = new Date(year, month - 1, day);
-      matchesPeriod = movDate >= start && movDate <= end;
-    }
+      if (start && end) {
+        // Extrai apenas a parte da data (YYYY-MM-DD) para evitar problemas de timezone
+        const dateOnly = mov.data.split('T')[0];
+        const [year, month, day] = dateOnly.split('-').map(Number);
+        const movDate = new Date(year, month - 1, day);
+        matchesPeriod = movDate >= start && movDate <= end;
+      }
 
-    return matchesSearch && matchesPeriod;
-  });
+      return matchesSearch && matchesPeriod;
+    })
+    .sort((a, b) => {
+      // Ordenar do mais recente para o mais antigo
+      // Primeiro por data (mais recente primeiro)
+      const dateA = new Date(a.data);
+      const dateB = new Date(b.data);
+      const dateDiff = dateB.getTime() - dateA.getTime();
+      
+      // Se as datas forem iguais, ordenar por ID (mais recente primeiro)
+      if (dateDiff === 0) {
+        return b.id - a.id;
+      }
+      
+      return dateDiff;
+    });
 
   const formatCurrency = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
   const formatMonth = (monthKey: string) => {

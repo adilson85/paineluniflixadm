@@ -4,11 +4,12 @@ import Layout from '../../components/Layout';
 import { MigrarClienteOfflineModal } from '../../components/modals/MigrarClienteOfflineModal';
 import { EditarClienteOfflineModal } from '../../components/modals/EditarClienteOfflineModal';
 import { AddCreditsModal } from '../../pages/ClientDetails/components/AddCreditsModal';
+import { DeleteClientModal } from '../../components/modals/DeleteClientModal';
 import { useOfflineClientData } from './hooks/useOfflineClientData';
 import { useOfflineClientMigration } from './hooks/useOfflineClientMigration';
 import { useOfflineClientTransactions, type RechargeOption } from './hooks/useOfflineClientTransactions';
 import { getOfflineClientPlanType, getDaysUntilExpiration, countOfflineClientLogins } from '../../utils/offlineClientHelpers';
-import { formatCurrency, formatDate, formatCPF, formatPhone } from '../../utils/clientHelpers';
+import { formatCurrency, formatDate, formatCPF, formatPhone, transformOfflineClientToClient } from '../../utils/clientHelpers';
 import { supabase } from '../../lib/supabase';
 import {
   ArrowLeft,
@@ -23,6 +24,7 @@ import {
   CheckCircle2,
   Edit,
   Plus,
+  Trash2,
 } from 'lucide-react';
 
 export default function ClienteOfflineDetails() {
@@ -35,7 +37,9 @@ export default function ClienteOfflineDetails() {
   const [showMigrarModal, setShowMigrarModal] = useState(false);
   const [showEditarModal, setShowEditarModal] = useState(false);
   const [showAddCreditsModal, setShowAddCreditsModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isProcessingCredits, setIsProcessingCredits] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [rechargeOptions, setRechargeOptions] = useState<RechargeOption[]>([]);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [showPasswords, setShowPasswords] = useState({
@@ -131,6 +135,43 @@ export default function ClienteOfflineDetails() {
     }
     loadRechargeOptions();
   }, []);
+
+  const handleDeleteClient = async () => {
+    if (!client || !id) return;
+
+    try {
+      setIsDeleting(true);
+      setSaveError(null);
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+      const response = await fetch(`${supabaseUrl}/functions/v1/delete-offline-client`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseAnonKey}`,
+        },
+        body: JSON.stringify({
+          clientId: id,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Erro ao excluir cliente offline');
+      }
+
+      // Redirecionar para a lista de clientes offline após exclusão bem-sucedida
+      navigate('/clientes-offline');
+    } catch (err: any) {
+      console.error('Erro ao excluir cliente offline:', err);
+      throw err; // Re-throw para o modal tratar
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const handleAddCredits = async (data: {
     rechargeOptionId: string;
@@ -256,6 +297,15 @@ export default function ClienteOfflineDetails() {
                   Migrar para Cliente com Acesso
                 </button>
               )}
+
+              {/* Botão Excluir */}
+              <button
+                onClick={() => setShowDeleteModal(true)}
+                className="flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Excluir Cliente
+              </button>
             </div>
           </div>
 
@@ -624,6 +674,16 @@ export default function ClienteOfflineDetails() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal de Excluir Cliente Offline */}
+      {client && (
+        <DeleteClientModal
+          isOpen={showDeleteModal}
+          onClose={() => setShowDeleteModal(false)}
+          onConfirm={handleDeleteClient}
+          client={transformOfflineClientToClient(client)}
+        />
       )}
     </Layout>
   );

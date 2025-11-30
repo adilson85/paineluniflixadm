@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import Layout from '../../components/Layout';
 import { ClientHeader } from './components/ClientHeader';
 import { ClientSubscriptions } from './components/ClientSubscriptions';
@@ -7,6 +7,7 @@ import { ClientReferrals } from './components/ClientReferrals';
 import { ClientTransactions } from './components/ClientTransactions';
 import { AddCreditsModal } from './components/AddCreditsModal';
 import { EditClientProfileModal } from '../../components/modals/EditClientProfileModal';
+import { DeleteClientModal } from '../../components/modals/DeleteClientModal';
 import { useClientData } from './hooks/useClientData';
 import { useClientReferrals } from './hooks/useClientReferrals';
 import { useClientTransactions, type RechargeOption } from './hooks/useClientTransactions';
@@ -29,6 +30,7 @@ interface EditingClient {
 
 export default function ClientDetails() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
 
   // Hooks customizados
   const { client, subscriptions, loading, error, refetch: refetchClient } = useClientData(id);
@@ -61,6 +63,10 @@ export default function ClientDetails() {
 
   // Estado de modal de edição de perfil
   const [showEditProfileModal, setShowEditProfileModal] = useState(false);
+
+  // Estado de modal de exclusão
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Carregar opções de recarga
   useEffect(() => {
@@ -229,6 +235,43 @@ export default function ClientDetails() {
     alert('Modal de resgate de comissão será implementado');
   };
 
+  const handleDeleteClient = async () => {
+    if (!client || !id) return;
+
+    try {
+      setIsDeleting(true);
+      setSaveError(null);
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+      const response = await fetch(`${supabaseUrl}/functions/v1/delete-client`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseAnonKey}`,
+        },
+        body: JSON.stringify({
+          clientId: id,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Erro ao excluir cliente');
+      }
+
+      // Redirecionar para a lista de clientes após exclusão bem-sucedida
+      navigate('/');
+    } catch (err: any) {
+      console.error('Erro ao excluir cliente:', err);
+      throw err; // Re-throw para o modal tratar
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const handleAddCredits = async (data: {
     rechargeOptionId: string;
     valorPago: number;
@@ -313,6 +356,7 @@ export default function ClientDetails() {
           client={client}
           onAddCredits={() => setShowAddCreditsModal(true)}
           onEditProfile={() => setShowEditProfileModal(true)}
+          onDelete={() => setShowDeleteModal(true)}
           totalCommission={totalCommission}
           totalReferrals={referrals.length}
           subscribersCount={referrals.filter(r => r.is_subscriber).length}
@@ -369,6 +413,14 @@ export default function ClientDetails() {
             }}
           />
         )}
+
+        {/* Modal de Excluir Cliente */}
+        <DeleteClientModal
+          isOpen={showDeleteModal}
+          onClose={() => setShowDeleteModal(false)}
+          onConfirm={handleDeleteClient}
+          client={client}
+        />
       </div>
     </Layout>
   );

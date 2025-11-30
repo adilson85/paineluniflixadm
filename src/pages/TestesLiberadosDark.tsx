@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Search, Filter, CalendarDays, Edit2, X, Check, Plus, Copy, CheckCircle2 } from 'lucide-react';
+import { Search, Filter, CalendarDays, Edit2, X, Check, Plus, Copy, CheckCircle2, Trash2 } from 'lucide-react';
 import Layout from '../components/Layout';
 import { supabase } from '../lib/supabase';
 import type { TesteLiberado } from '../types';
@@ -66,6 +66,10 @@ export default function TestesLiberados() {
     nomeCliente: string;
   } | null>(null);
   const [passwordCopied, setPasswordCopied] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [testeParaExcluir, setTesteParaExcluir] = useState<TesteLiberado | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
   useEffect(() => {
     fetchTestes();
@@ -222,6 +226,53 @@ export default function TestesLiberados() {
     setEditingTeste(null);
     setEditFormData({});
     setError(null);
+  };
+
+  const handleDeleteTeste = async () => {
+    if (!testeParaExcluir) return;
+
+    if (deleteConfirmText !== testeParaExcluir.nome) {
+      setError(`Digite "${testeParaExcluir.nome}" para confirmar`);
+      return;
+    }
+
+    try {
+      setIsDeleting(true);
+      setError(null);
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+      const response = await fetch(`${supabaseUrl}/functions/v1/delete-teste`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseAnonKey}`,
+        },
+        body: JSON.stringify({
+          testeId: testeParaExcluir.id,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Erro ao excluir teste');
+      }
+
+      // Recarregar lista de testes
+      await fetchTestes();
+      
+      // Fechar modal
+      setShowDeleteModal(false);
+      setTesteParaExcluir(null);
+      setDeleteConfirmText('');
+    } catch (err: any) {
+      console.error('Erro ao excluir teste:', err);
+      setError(err.message || 'Erro ao excluir teste. Por favor, tente novamente.');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleTornarAssinanteClick = (teste: TesteLiberado, e: React.MouseEvent) => {
@@ -588,7 +639,7 @@ export default function TestesLiberados() {
           <tbody className="bg-slate-800 divide-y divide-slate-700">
             {loading ? (
               <tr>
-                <td colSpan={10} className="px-6 py-4 text-center text-slate-300">
+                <td colSpan={11} className="px-6 py-4 text-center text-slate-300">
                   <div className="flex items-center justify-center">
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
                     <span className="ml-2">Carregando...</span>
@@ -597,7 +648,7 @@ export default function TestesLiberados() {
               </tr>
             ) : filteredTestes.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-6 py-4 text-center text-slate-300">Nenhum teste encontrado</td>
+                <td colSpan={11} className="px-6 py-4 text-center text-slate-300">Nenhum teste encontrado</td>
               </tr>
             ) : (
               filteredTestes.map((teste) => (
@@ -631,6 +682,26 @@ export default function TestesLiberados() {
                     {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(teste.valor_pago)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{teste.quantidade_teste}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
+                    {teste.assinante ? (
+                      <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-slate-700/50 text-slate-400">
+                        Não permitido
+                      </span>
+                    ) : (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setTesteParaExcluir(teste);
+                          setShowDeleteModal(true);
+                          setDeleteConfirmText('');
+                        }}
+                        className="px-3 py-1 text-xs font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors flex items-center space-x-1"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        <span>Excluir</span>
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))
             )}
@@ -1418,6 +1489,112 @@ export default function TestesLiberados() {
               >
                 Fechar
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Excluir Teste */}
+      {showDeleteModal && testeParaExcluir && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-lg shadow-xl border border-slate-700 w-full max-w-md">
+            <div className="flex items-center justify-between p-6 border-b border-slate-700">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 bg-red-900/30 rounded-lg border border-red-700">
+                  <Trash2 className="w-5 h-5 text-red-400" />
+                </div>
+                <h2 className="text-xl font-bold text-slate-100">Excluir Teste</h2>
+              </div>
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setTesteParaExcluir(null);
+                  setDeleteConfirmText('');
+                  setError(null);
+                }}
+                disabled={isDeleting}
+                className="text-slate-400 hover:text-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <div className="flex items-start space-x-3 mb-6 p-4 bg-red-900/20 border border-red-700 rounded-lg">
+                <X className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-red-300 font-semibold mb-2">Atenção: Esta ação é irreversível!</p>
+                  <p className="text-red-400 text-sm">
+                    Ao excluir este teste, todos os dados relacionados serão permanentemente removidos.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mb-6 p-4 bg-slate-900 rounded-lg border border-slate-700">
+                <p className="text-slate-400 text-sm mb-2">Teste a ser excluído:</p>
+                <p className="text-slate-100 font-semibold text-lg">{testeParaExcluir.nome}</p>
+                {testeParaExcluir.telefone && (
+                  <p className="text-slate-400 text-sm mt-1">{testeParaExcluir.telefone}</p>
+                )}
+                {testeParaExcluir.email && (
+                  <p className="text-slate-400 text-sm">{testeParaExcluir.email}</p>
+                )}
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Para confirmar, digite o nome do teste: <span className="font-mono text-slate-400">"{testeParaExcluir.nome}"</span>
+                </label>
+                <input
+                  type="text"
+                  value={deleteConfirmText}
+                  onChange={(e) => {
+                    setDeleteConfirmText(e.target.value);
+                    setError(null);
+                  }}
+                  disabled={isDeleting}
+                  className="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  placeholder={testeParaExcluir.nome}
+                />
+              </div>
+
+              {error && (
+                <div className="mb-6 p-4 bg-red-900/20 border border-red-700 rounded-lg">
+                  <p className="text-red-400 text-sm">{error}</p>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setTesteParaExcluir(null);
+                    setDeleteConfirmText('');
+                    setError(null);
+                  }}
+                  disabled={isDeleting}
+                  className="px-4 py-2 text-slate-300 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleDeleteTeste}
+                  disabled={isDeleting || deleteConfirmText !== testeParaExcluir.nome}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                >
+                  {isDeleting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      <span>Excluindo...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4" />
+                      <span>Excluir Teste</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
