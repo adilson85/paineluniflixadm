@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { DollarSign, Plus, Edit2, X, Check, Tag, Calendar } from 'lucide-react';
+import { DollarSign, Plus, Edit2, X, Check, Tag, Calendar, Trash2 } from 'lucide-react';
 import Layout from '../components/Layout';
 import { supabase } from '../lib/supabase';
 import type { Promotion } from '../types';
@@ -40,6 +40,9 @@ export default function PrecosPlanos() {
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [availableUsers, setAvailableUsers] = useState<{ id: string; full_name: string; email: string | null }[]>([]);
   const [showUserSelector, setShowUserSelector] = useState(false);
+  const [showDeletePromotionModal, setShowDeletePromotionModal] = useState(false);
+  const [promotionToDelete, setPromotionToDelete] = useState<Promotion | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -316,6 +319,32 @@ export default function PrecosPlanos() {
     }
   };
 
+  const handleDeletePromotion = async () => {
+    if (!promotionToDelete) return;
+
+    setIsDeleting(true);
+    setError(null);
+
+    try {
+      // Se for promoção individual, os vínculos serão deletados automaticamente (ON DELETE CASCADE)
+      const { error: deleteError } = await supabase
+        .from('promotions')
+        .delete()
+        .eq('id', promotionToDelete.id);
+
+      if (deleteError) throw deleteError;
+
+      await fetchData();
+      setShowDeletePromotionModal(false);
+      setPromotionToDelete(null);
+    } catch (err) {
+      console.error('Error deleting promotion:', err);
+      setError('Erro ao excluir promoção. Por favor, tente novamente.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -485,31 +514,44 @@ export default function PrecosPlanos() {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <button
-                        onClick={async () => {
-                          setEditingPromotion(promotion);
-                          
-                          // Se for promoção individual, carregar clientes vinculados
-                          if (promotion.is_individual) {
-                            const { data: promotionUsers } = await supabase
-                              .from('promotion_users')
-                              .select('user_id')
-                              .eq('promotion_id', promotion.id)
-                              .eq('active', true);
+                      <div className="flex items-center space-x-3">
+                        <button
+                          onClick={async () => {
+                            setEditingPromotion(promotion);
                             
-                            if (promotionUsers) {
-                              setSelectedUsers(promotionUsers.map(pu => pu.user_id));
+                            // Se for promoção individual, carregar clientes vinculados
+                            if (promotion.is_individual) {
+                              const { data: promotionUsers } = await supabase
+                                .from('promotion_users')
+                                .select('user_id')
+                                .eq('promotion_id', promotion.id)
+                                .eq('active', true);
+                              
+                              if (promotionUsers) {
+                                setSelectedUsers(promotionUsers.map(pu => pu.user_id));
+                              }
+                            } else {
+                              setSelectedUsers([]);
                             }
-                          } else {
-                            setSelectedUsers([]);
-                          }
-                          
-                          setShowPromotionModal(true);
-                        }}
-                        className="text-blue-400 hover:text-blue-300"
-                      >
-                        <Edit2 className="h-5 w-5" />
-                      </button>
+                            
+                            setShowPromotionModal(true);
+                          }}
+                          className="text-blue-400 hover:text-blue-300"
+                          title="Editar Promoção"
+                        >
+                          <Edit2 className="h-5 w-5" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setPromotionToDelete(promotion);
+                            setShowDeletePromotionModal(true);
+                          }}
+                          className="text-red-400 hover:text-red-300"
+                          title="Excluir Promoção"
+                        >
+                          <Trash2 className="h-5 w-5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -960,6 +1002,52 @@ export default function PrecosPlanos() {
                 className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
               >
                 {editingRecharge.id ? 'Atualizar' : 'Criar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Confirmar Exclusão de Promoção */}
+      {showDeletePromotionModal && promotionToDelete && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-lg p-6 max-w-md w-full border border-slate-700">
+            <h3 className="text-xl font-semibold text-slate-100 mb-4">Confirmar Exclusão</h3>
+            <p className="text-slate-300 mb-4">
+              Tem certeza que deseja excluir a promoção <strong className="text-red-400">"{promotionToDelete.name}"</strong>?
+            </p>
+            {promotionToDelete.is_individual && (
+              <p className="text-sm text-amber-400 mb-4">
+                ⚠️ Esta é uma promoção individual. Todos os vínculos com clientes serão removidos.
+              </p>
+            )}
+            {promotionToDelete.current_uses > 0 && (
+              <p className="text-sm text-slate-400 mb-4">
+                Esta promoção já foi utilizada {promotionToDelete.current_uses} vez(es).
+              </p>
+            )}
+            <p className="text-sm text-slate-400 mb-6">
+              Esta ação é irreversível.
+            </p>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowDeletePromotionModal(false);
+                  setPromotionToDelete(null);
+                }}
+                className="px-4 py-2 bg-slate-700 text-slate-200 rounded-lg hover:bg-slate-600"
+                disabled={isDeleting}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDeletePromotion}
+                disabled={isDeleting}
+                className={`px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 ${
+                  isDeleting ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
+              >
+                {isDeleting ? 'Excluindo...' : 'Excluir'}
               </button>
             </div>
           </div>
