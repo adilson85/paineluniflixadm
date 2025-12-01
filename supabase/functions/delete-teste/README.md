@@ -104,3 +104,4 @@ No N8N, use o nó **HTTP Request**:
 3. **Backup**: Considere fazer backup antes de excluir testes importantes
 
 
+

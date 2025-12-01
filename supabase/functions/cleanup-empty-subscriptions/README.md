@@ -225,3 +225,4 @@ Você pode configurar no N8N para executar esta função periodicamente (ex: dia
 - **Manutenção preventiva**: Evitar erros futuros no sistema
 
 
+

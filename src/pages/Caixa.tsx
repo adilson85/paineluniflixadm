@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Wallet, Search, CalendarDays, CreditCard as Edit2, X, Check } from 'lucide-react';
+import { useEffect, useState, useMemo } from 'react';
+import { Wallet, Search, CalendarDays, CreditCard as Edit2, X, Check, ChevronLeft, ChevronRight } from 'lucide-react';
 import Layout from '../components/Layout';
 import { supabase } from '../lib/supabase';
 import type { CaixaMovimentacao, MonthSummary } from '../types';
@@ -25,6 +25,10 @@ export default function Caixa() {
   const [endDate, setEndDate] = useState('');
   const [editingTransaction, setEditingTransaction] = useState<EditingTransaction | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Paginação
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
 
   useEffect(() => {
     fetchMovimentacoes();
@@ -189,38 +193,51 @@ export default function Caixa() {
     return { start, end };
   };
 
-  const filteredMovimentacoes = movimentacoes
-    .filter(mov => {
-      const matchesSearch = mov.historico?.toLowerCase().includes(searchTerm.toLowerCase()) || false;
+  const filteredMovimentacoes = useMemo(() => {
+    return movimentacoes
+      .filter(mov => {
+        const matchesSearch = mov.historico?.toLowerCase().includes(searchTerm.toLowerCase()) || false;
 
-      // Filtro de período
-      const { start, end } = getDateRange();
-      let matchesPeriod = true;
+        // Filtro de período
+        const { start, end } = getDateRange();
+        let matchesPeriod = true;
 
-      if (start && end) {
-        // Extrai apenas a parte da data (YYYY-MM-DD) para evitar problemas de timezone
-        const dateOnly = mov.data.split('T')[0];
-        const [year, month, day] = dateOnly.split('-').map(Number);
-        const movDate = new Date(year, month - 1, day);
-        matchesPeriod = movDate >= start && movDate <= end;
-      }
+        if (start && end) {
+          // Extrai apenas a parte da data (YYYY-MM-DD) para evitar problemas de timezone
+          const dateOnly = mov.data.split('T')[0];
+          const [year, month, day] = dateOnly.split('-').map(Number);
+          const movDate = new Date(year, month - 1, day);
+          matchesPeriod = movDate >= start && movDate <= end;
+        }
 
-      return matchesSearch && matchesPeriod;
-    })
-    .sort((a, b) => {
-      // Ordenar do mais recente para o mais antigo
-      // Primeiro por data (mais recente primeiro)
-      const dateA = new Date(a.data);
-      const dateB = new Date(b.data);
-      const dateDiff = dateB.getTime() - dateA.getTime();
-      
-      // Se as datas forem iguais, ordenar por ID (mais recente primeiro)
-      if (dateDiff === 0) {
-        return b.id - a.id;
-      }
-      
-      return dateDiff;
-    });
+        return matchesSearch && matchesPeriod;
+      })
+      .sort((a, b) => {
+        // Ordenar do mais recente para o mais antigo
+        // Primeiro por data (mais recente primeiro)
+        const dateA = new Date(a.data);
+        const dateB = new Date(b.data);
+        const dateDiff = dateB.getTime() - dateA.getTime();
+        
+        // Se as datas forem iguais, ordenar por ID (mais recente primeiro)
+        if (dateDiff === 0) {
+          return b.id - a.id;
+        }
+        
+        return dateDiff;
+      });
+  }, [movimentacoes, searchTerm, periodFilter, startDate, endDate]);
+
+  // Cálculos de paginação
+  const totalPages = Math.ceil(filteredMovimentacoes.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedMovimentacoes = filteredMovimentacoes.slice(startIndex, endIndex);
+
+  // Reset página ao mudar filtros
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, periodFilter, startDate, endDate]);
 
   const formatCurrency = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
   const formatMonth = (monthKey: string) => {
@@ -350,12 +367,12 @@ export default function Caixa() {
                   </div>
                 </td>
               </tr>
-            ) : filteredMovimentacoes.length === 0 ? (
+            ) : paginatedMovimentacoes.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-6 py-4 text-center text-slate-300">Nenhuma movimentação encontrada</td>
               </tr>
             ) : (
-              filteredMovimentacoes.map((mov) => (
+              paginatedMovimentacoes.map((mov) => (
                 <tr key={mov.id}>
                   <td className="px-6 py-4 whitespace-nowrap text-slate-100">{formatDateBR(mov.data)}</td>
                   <td className="px-6 py-4 text-slate-300">
@@ -425,6 +442,105 @@ export default function Caixa() {
           </tbody>
         </table>
       </div>
+
+      {/* Paginação */}
+      {!loading && filteredMovimentacoes.length > 0 && (
+        <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-4 px-2">
+          <div className="flex items-center gap-4 text-sm text-slate-400">
+            <span>
+              Mostrando {startIndex + 1}-{Math.min(endIndex, filteredMovimentacoes.length)} de {filteredMovimentacoes.length} registros
+            </span>
+            <div className="flex items-center gap-2">
+              <span>Por página:</span>
+              <select
+                value={itemsPerPage}
+                onChange={(e) => {
+                  setItemsPerPage(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600"
+              >
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCurrentPage(1)}
+              disabled={currentPage === 1}
+              className="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              ««
+            </button>
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className="p-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-1">
+              {(() => {
+                const pages = [];
+                const maxVisiblePages = 5;
+                let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+                let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+                if (endPage - startPage + 1 < maxVisiblePages) {
+                  startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                }
+
+                if (startPage > 1) {
+                  pages.push(
+                    <button key={1} onClick={() => setCurrentPage(1)} className="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 hover:bg-slate-700 transition-colors">1</button>
+                  );
+                  if (startPage > 2) pages.push(<span key="e1" className="px-2 text-slate-500">...</span>);
+                }
+
+                for (let i = startPage; i <= endPage; i++) {
+                  pages.push(
+                    <button
+                      key={i}
+                      onClick={() => setCurrentPage(i)}
+                      className={`px-3 py-1.5 rounded-lg transition-colors ${currentPage === i ? 'bg-blue-600 text-white border border-blue-600' : 'bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700'}`}
+                    >
+                      {i}
+                    </button>
+                  );
+                }
+
+                if (endPage < totalPages) {
+                  if (endPage < totalPages - 1) pages.push(<span key="e2" className="px-2 text-slate-500">...</span>);
+                  pages.push(
+                    <button key={totalPages} onClick={() => setCurrentPage(totalPages)} className="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 hover:bg-slate-700 transition-colors">{totalPages}</button>
+                  );
+                }
+                return pages;
+              })()}
+            </div>
+
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages}
+              className="p-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={currentPage === totalPages}
+              className="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              »»
+            </button>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }

@@ -234,3 +234,4 @@ No N8N, use o nó **HTTP Request**:
 4. **Atualização parcial**: Você pode atualizar apenas 1, 2 ou 3 subscriptions conforme necessário.
 
 
+

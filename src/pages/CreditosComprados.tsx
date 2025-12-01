@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Search, Filter, CreditCard, Plus, X } from 'lucide-react';
+import React, { useEffect, useState, useMemo } from 'react';
+import { Search, Filter, CreditCard, Plus, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import Layout from '../components/Layout';
 import { supabase } from '../lib/supabase';
 import type { CompraCredito, CreditoMensal } from '../types';
@@ -23,6 +23,10 @@ export default function CreditosComprados() {
     quantidade_creditos: 0,
     valor_total: 0,
   });
+
+  // Paginação
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
 
   useEffect(() => {
     fetchCompras();
@@ -129,15 +133,28 @@ export default function CreditosComprados() {
     setResumoMensal(sortedMonths);
   };
 
-  const filteredCompras = compras.filter(compra => {
-    const matchesPainel = !painelFilter || compra.painel === painelFilter;
-    // Extrai apenas a parte da data (YYYY-MM-DD) para evitar problemas de timezone
-    const dateOnly = compra.data.split('T')[0];
-    const [year, month] = dateOnly.split('-');
-    const monthKey = `${year}-${month}`;
-    const matchesMes = !mesFilter || monthKey === mesFilter;
-    return matchesPainel && matchesMes;
-  });
+  const filteredCompras = useMemo(() => {
+    return compras.filter(compra => {
+      const matchesPainel = !painelFilter || compra.painel === painelFilter;
+      // Extrai apenas a parte da data (YYYY-MM-DD) para evitar problemas de timezone
+      const dateOnly = compra.data.split('T')[0];
+      const [year, month] = dateOnly.split('-');
+      const monthKey = `${year}-${month}`;
+      const matchesMes = !mesFilter || monthKey === mesFilter;
+      return matchesPainel && matchesMes;
+    });
+  }, [compras, painelFilter, mesFilter]);
+
+  // Cálculos de paginação
+  const totalPages = Math.ceil(filteredCompras.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedCompras = filteredCompras.slice(startIndex, endIndex);
+
+  // Reset página ao mudar filtros
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [painelFilter, mesFilter]);
 
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   const formatDate = (dateString: string) => formatDateBR(dateString);
@@ -306,12 +323,12 @@ export default function CreditosComprados() {
                   </div>
                 </td>
               </tr>
-            ) : filteredCompras.length === 0 ? (
+            ) : paginatedCompras.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-6 py-4 text-center text-slate-300">Nenhuma compra encontrada</td>
               </tr>
             ) : (
-              filteredCompras.map((compra) => (
+              paginatedCompras.map((compra) => (
                 <tr key={compra.id}>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-100">{formatDate(compra.data)}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{compra.painel}</td>
@@ -324,6 +341,105 @@ export default function CreditosComprados() {
           </tbody>
         </table>
       </div>
+
+      {/* Paginação */}
+      {!loading && filteredCompras.length > 0 && (
+        <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-4 px-2">
+          <div className="flex items-center gap-4 text-sm text-slate-400">
+            <span>
+              Mostrando {startIndex + 1}-{Math.min(endIndex, filteredCompras.length)} de {filteredCompras.length} registros
+            </span>
+            <div className="flex items-center gap-2">
+              <span>Por página:</span>
+              <select
+                value={itemsPerPage}
+                onChange={(e) => {
+                  setItemsPerPage(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600"
+              >
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCurrentPage(1)}
+              disabled={currentPage === 1}
+              className="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              ««
+            </button>
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className="p-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-1">
+              {(() => {
+                const pages = [];
+                const maxVisiblePages = 5;
+                let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+                let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+                if (endPage - startPage + 1 < maxVisiblePages) {
+                  startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                }
+
+                if (startPage > 1) {
+                  pages.push(
+                    <button key={1} onClick={() => setCurrentPage(1)} className="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 hover:bg-slate-700 transition-colors">1</button>
+                  );
+                  if (startPage > 2) pages.push(<span key="e1" className="px-2 text-slate-500">...</span>);
+                }
+
+                for (let i = startPage; i <= endPage; i++) {
+                  pages.push(
+                    <button
+                      key={i}
+                      onClick={() => setCurrentPage(i)}
+                      className={`px-3 py-1.5 rounded-lg transition-colors ${currentPage === i ? 'bg-blue-600 text-white border border-blue-600' : 'bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700'}`}
+                    >
+                      {i}
+                    </button>
+                  );
+                }
+
+                if (endPage < totalPages) {
+                  if (endPage < totalPages - 1) pages.push(<span key="e2" className="px-2 text-slate-500">...</span>);
+                  pages.push(
+                    <button key={totalPages} onClick={() => setCurrentPage(totalPages)} className="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 hover:bg-slate-700 transition-colors">{totalPages}</button>
+                  );
+                }
+                return pages;
+              })()}
+            </div>
+
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages}
+              className="p-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={currentPage === totalPages}
+              className="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              »»
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Modal de Nova Compra */}
       {showForm && (

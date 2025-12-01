@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Search, Filter, CalendarDays, Edit2, X, Check, Plus, Copy, CheckCircle2, Trash2 } from 'lucide-react';
+import React, { useEffect, useState, useMemo } from 'react';
+import { Search, Filter, CalendarDays, Edit2, X, Check, Plus, Copy, CheckCircle2, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import Layout from '../components/Layout';
 import { supabase } from '../lib/supabase';
 import type { TesteLiberado } from '../types';
@@ -70,6 +70,10 @@ export default function TestesLiberados() {
   const [testeParaExcluir, setTesteParaExcluir] = useState<TesteLiberado | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  
+  // Paginação
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
 
   useEffect(() => {
     fetchTestes();
@@ -143,21 +147,34 @@ export default function TestesLiberados() {
     }
   }
 
-  const filteredTestes = testes.filter(teste => {
-    const matchesSearch =
-      teste.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (teste.telefone && teste.telefone.includes(searchTerm));
+  const filteredTestes = useMemo(() => {
+    return testes.filter(teste => {
+      const matchesSearch =
+        teste.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (teste.telefone && teste.telefone.includes(searchTerm));
 
-    const matchesPainel = !painelFilter || teste.painel1 === painelFilter;
+      const matchesPainel = !painelFilter || teste.painel1 === painelFilter;
 
-    // Extrai apenas a parte da data (YYYY-MM-DD) para evitar problemas de timezone
-    const dateOnly = teste.data_teste.split('T')[0];
-    const [year, month] = dateOnly.split('-');
-    const monthKey = `${year}-${month}`;
-    const matchesMes = !mesFilter || monthKey === mesFilter;
+      // Extrai apenas a parte da data (YYYY-MM-DD) para evitar problemas de timezone
+      const dateOnly = teste.data_teste.split('T')[0];
+      const [year, month] = dateOnly.split('-');
+      const monthKey = `${year}-${month}`;
+      const matchesMes = !mesFilter || monthKey === mesFilter;
 
-    return matchesSearch && matchesPainel && matchesMes;
-  });
+      return matchesSearch && matchesPainel && matchesMes;
+    });
+  }, [testes, searchTerm, painelFilter, mesFilter]);
+
+  // Cálculos de paginação
+  const totalPages = Math.ceil(filteredTestes.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedTestes = filteredTestes.slice(startIndex, endIndex);
+
+  // Reset página ao mudar filtros
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, painelFilter, mesFilter]);
 
   const formatDate = (dateString: string) => formatDateBR(dateString);
   const formatMonth = (monthKey: string) => {
@@ -632,26 +649,25 @@ export default function TestesLiberados() {
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Data Teste</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Aplicativo</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Assinante</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Valor Pago</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Qtd. Teste</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Ações</th>
             </tr>
           </thead>
           <tbody className="bg-slate-800 divide-y divide-slate-700">
             {loading ? (
               <tr>
-                <td colSpan={11} className="px-6 py-4 text-center text-slate-300">
+                <td colSpan={9} className="px-6 py-4 text-center text-slate-300">
                   <div className="flex items-center justify-center">
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
                     <span className="ml-2">Carregando...</span>
                   </div>
                 </td>
               </tr>
-            ) : filteredTestes.length === 0 ? (
+            ) : paginatedTestes.length === 0 ? (
               <tr>
-                <td colSpan={11} className="px-6 py-4 text-center text-slate-300">Nenhum teste encontrado</td>
+                <td colSpan={9} className="px-6 py-4 text-center text-slate-300">Nenhum teste encontrado</td>
               </tr>
             ) : (
-              filteredTestes.map((teste) => (
+              paginatedTestes.map((teste) => (
                 <tr 
                   key={teste.id}
                   className="hover:bg-slate-700/50 cursor-pointer transition-colors"
@@ -659,11 +675,11 @@ export default function TestesLiberados() {
                 >
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-100">{teste.nome}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{teste.telefone ? formatPhone(teste.telefone) : '-'}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{teste.usuario1}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{teste.senha1}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{teste.painel1}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{teste.usuario1 || '-'}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{teste.senha1 || '-'}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{teste.painel1 || '-'}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{formatDate(teste.data_teste)}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{teste.aplicativo}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{teste.aplicativo || '-'}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
                     {teste.assinante ? (
                       <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-900/30 text-green-300">
@@ -679,13 +695,9 @@ export default function TestesLiberados() {
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
-                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(teste.valor_pago)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{teste.quantidade_teste}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
                     {teste.assinante ? (
                       <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-slate-700/50 text-slate-400">
-                        Não permitido
+                        -
                       </span>
                     ) : (
                       <button
@@ -695,10 +707,10 @@ export default function TestesLiberados() {
                           setShowDeleteModal(true);
                           setDeleteConfirmText('');
                         }}
-                        className="px-3 py-1 text-xs font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors flex items-center space-x-1"
+                        className="p-1.5 text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded-lg transition-colors"
+                        title="Excluir Teste"
                       >
-                        <Trash2 className="w-3 h-3" />
-                        <span>Excluir</span>
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     )}
                   </td>
@@ -708,6 +720,135 @@ export default function TestesLiberados() {
           </tbody>
         </table>
       </div>
+
+      {/* Paginação */}
+      {!loading && filteredTestes.length > 0 && (
+        <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-4 px-2">
+          <div className="flex items-center gap-4 text-sm text-slate-400">
+            <span>
+              Mostrando {startIndex + 1}-{Math.min(endIndex, filteredTestes.length)} de {filteredTestes.length} testes
+            </span>
+            <div className="flex items-center gap-2">
+              <span>Por página:</span>
+              <select
+                value={itemsPerPage}
+                onChange={(e) => {
+                  setItemsPerPage(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600"
+              >
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCurrentPage(1)}
+              disabled={currentPage === 1}
+              className="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              title="Primeira página"
+            >
+              ««
+            </button>
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className="p-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              title="Página anterior"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-1">
+              {/* Renderiza os números das páginas */}
+              {(() => {
+                const pages = [];
+                const maxVisiblePages = 5;
+                let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+                let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+                if (endPage - startPage + 1 < maxVisiblePages) {
+                  startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                }
+
+                if (startPage > 1) {
+                  pages.push(
+                    <button
+                      key={1}
+                      onClick={() => setCurrentPage(1)}
+                      className="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 hover:bg-slate-700 transition-colors"
+                    >
+                      1
+                    </button>
+                  );
+                  if (startPage > 2) {
+                    pages.push(
+                      <span key="ellipsis1" className="px-2 text-slate-500">...</span>
+                    );
+                  }
+                }
+
+                for (let i = startPage; i <= endPage; i++) {
+                  pages.push(
+                    <button
+                      key={i}
+                      onClick={() => setCurrentPage(i)}
+                      className={`px-3 py-1.5 rounded-lg transition-colors ${
+                        currentPage === i
+                          ? 'bg-blue-600 text-white border border-blue-600'
+                          : 'bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700'
+                      }`}
+                    >
+                      {i}
+                    </button>
+                  );
+                }
+
+                if (endPage < totalPages) {
+                  if (endPage < totalPages - 1) {
+                    pages.push(
+                      <span key="ellipsis2" className="px-2 text-slate-500">...</span>
+                    );
+                  }
+                  pages.push(
+                    <button
+                      key={totalPages}
+                      onClick={() => setCurrentPage(totalPages)}
+                      className="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 hover:bg-slate-700 transition-colors"
+                    >
+                      {totalPages}
+                    </button>
+                  );
+                }
+
+                return pages;
+              })()}
+            </div>
+
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages}
+              className="p-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              title="Próxima página"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={currentPage === totalPages}
+              className="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              title="Última página"
+            >
+              »»
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Modal de Edição */}
       {isEditing && editingTeste && (
