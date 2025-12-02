@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useForm } from 'react-hook-form';
-import { Users, AlertCircle, UserPlus, Mail, ArrowLeft } from 'lucide-react';
+import { Users, AlertCircle, UserPlus, Mail, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface LoginFormData {
@@ -24,6 +24,7 @@ export default function Login() {
   const [showForgotPassword, setShowForgotPassword] = React.useState(false);
   const [forgotPasswordSuccess, setForgotPasswordSuccess] = React.useState(false);
   const [forgotPasswordError, setForgotPasswordError] = React.useState<string | null>(null);
+  const [showPassword, setShowPassword] = React.useState(false);
 
   const onSubmit = async (data: LoginFormData) => {
     if (isCreatingUser) {
@@ -270,18 +271,31 @@ export default function Login() {
               <label htmlFor="password" className="block text-sm font-medium text-gray-700">
                 Senha
               </label>
-              <input
-                {...register('password', {
-                  required: 'Senha é obrigatória',
-                  minLength: {
-                    value: 6,
-                    message: 'A senha deve ter pelo menos 6 caracteres',
-                  },
-                })}
-                type="password"
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                placeholder="••••••"
-              />
+              <div className="relative mt-1">
+                <input
+                  {...register('password', {
+                    required: 'Senha é obrigatória',
+                    minLength: {
+                      value: 6,
+                      message: 'A senha deve ter pelo menos 6 caracteres',
+                    },
+                  })}
+                  type={showPassword ? 'text' : 'password'}
+                  className="block w-full rounded-md border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500 pr-10"
+                  placeholder="••••••"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-5 w-5" />
+                  ) : (
+                    <Eye className="h-5 w-5" />
+                  )}
+                </button>
+              </div>
               {errors.password && (
                 <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>
               )}

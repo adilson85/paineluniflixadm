@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Users, UserMinus, DollarSign, TrendingDown, CalendarCheck, UserPlus, ArrowDownRight, CreditCard, TrendingUp } from 'lucide-react';
+import { Users, UserMinus, DollarSign, TrendingDown, CalendarCheck, UserPlus, ArrowDownRight, CreditCard, TrendingUp, Wallet } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { Client } from '../types';
 
@@ -15,6 +15,7 @@ interface DashboardMetrics {
   conversionRate: number;
   profit: number;
   totalCreditsVendidos: number;
+  pendingBonuses: number;
 }
 
 type PeriodFilter = 'current_month' | 'last_month' | 'custom';
@@ -38,7 +39,8 @@ export default function MainDashboard({ clients, periodFilter, startDate, endDat
     newClients: 0,
     conversionRate: 0,
     profit: 0,
-    totalCreditsVendidos: 0
+    totalCreditsVendidos: 0,
+    pendingBonuses: 0
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -100,6 +102,17 @@ export default function MainDashboard({ clients, periodFilter, startDate, endDat
         .select('*');
 
       if (creditosError) throw creditosError;
+
+      // Buscar total de bônus pendentes (soma de total_commission de todos os usuários)
+      const { data: usersWithCommission, error: commissionError } = await supabase
+        .from('users')
+        .select('total_commission');
+
+      if (commissionError) throw commissionError;
+
+      // Calcular total de bônus pendentes
+      const pendingBonuses = (usersWithCommission || [])
+        .reduce((sum: number, user: any) => sum + (parseFloat(user.total_commission) || 0), 0);
 
       // Usar clients recebidos via props (já inclui online + offline)
       const allClients = clients;
@@ -183,7 +196,8 @@ export default function MainDashboard({ clients, periodFilter, startDate, endDat
         newClients,
         conversionRate,
         profit,
-        totalCreditsVendidos
+        totalCreditsVendidos,
+        pendingBonuses
       });
 
     } catch (err) {
@@ -300,6 +314,25 @@ export default function MainDashboard({ clients, periodFilter, startDate, endDat
                 currency: 'BRL'
               }).format(metrics.profit)}
             </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Bônus Pendentes - Reserva necessária no caixa */}
+      <div className="bg-slate-800 rounded-lg shadow p-6 border-2 border-yellow-500/30">
+        <div className="flex items-center">
+          <div className="p-3 rounded-full bg-yellow-500/10 text-yellow-400">
+            <Wallet className="h-6 w-6" />
+          </div>
+          <div className="ml-4">
+            <p className="text-sm font-medium text-slate-400">Bônus a Pagar</p>
+            <p className="text-2xl font-semibold text-yellow-400">
+              {new Intl.NumberFormat('pt-BR', {
+                style: 'currency',
+                currency: 'BRL'
+              }).format(metrics.pendingBonuses)}
+            </p>
+            <p className="text-xs text-slate-500 mt-1">Reserva necessária no caixa</p>
           </div>
         </div>
       </div>
