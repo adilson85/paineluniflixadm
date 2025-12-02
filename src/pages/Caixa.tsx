@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Wallet, Search, CalendarDays, CreditCard as Edit2, X, Check, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Wallet, Search, CalendarDays, CreditCard as Edit2, X, Check, ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react';
 import Layout from '../components/Layout';
 import { supabase } from '../lib/supabase';
 import type { CaixaMovimentacao, MonthSummary } from '../types';
@@ -10,6 +10,13 @@ interface EditingTransaction {
   historico: string;
   entrada: number | null;
   saida: number | null;
+}
+
+interface NovoLancamento {
+  data: string;
+  historico: string;
+  tipo: 'entrada' | 'saida';
+  valor: string;
 }
 
 type PeriodFilter = 'today' | 'yesterday' | 'last_5_days' | 'last_7_days' | 'current_month' | 'last_month' | 'custom' | 'all';
@@ -29,6 +36,21 @@ export default function Caixa() {
   // Paginação
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
+
+  // Modal de novo lançamento
+  const [showNovoLancamento, setShowNovoLancamento] = useState(false);
+  const [novoLancamento, setNovoLancamento] = useState<NovoLancamento>({
+    data: new Date().toISOString().split('T')[0],
+    historico: '',
+    tipo: 'saida',
+    valor: ''
+  });
+  const [isCreating, setIsCreating] = useState(false);
+
+  // Modal de exclusão
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [lancamentoParaExcluir, setLancamentoParaExcluir] = useState<CaixaMovimentacao | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     fetchMovimentacoes();
@@ -127,6 +149,71 @@ export default function Caixa() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const criarLancamento = async () => {
+    if (!novoLancamento.historico || !novoLancamento.valor || isCreating) return;
+
+    try {
+      setIsCreating(true);
+      setError(null);
+
+      const valor = parseFloat(novoLancamento.valor.replace(',', '.'));
+      if (isNaN(valor) || valor <= 0) {
+        setError('Valor inválido. Digite um valor maior que zero.');
+        return;
+      }
+
+      const novaMovimentacao = {
+        data: novoLancamento.data,
+        historico: novoLancamento.historico,
+        entrada: novoLancamento.tipo === 'entrada' ? valor : null,
+        saida: novoLancamento.tipo === 'saida' ? valor : null
+      };
+
+      const { error } = await supabase.from('caixa_movimentacoes').insert(novaMovimentacao);
+      if (error) throw error;
+
+      await fetchMovimentacoes();
+      setShowNovoLancamento(false);
+      setNovoLancamento({
+        data: new Date().toISOString().split('T')[0],
+        historico: '',
+        tipo: 'saida',
+        valor: ''
+      });
+    } catch (err) {
+      console.error(err);
+      setError('Não foi possível criar o lançamento.');
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const excluirLancamento = async () => {
+    if (!lancamentoParaExcluir || isDeleting) return;
+
+    try {
+      setIsDeleting(true);
+      setError(null);
+
+      const { error } = await supabase.from('caixa_movimentacoes').delete().eq('id', lancamentoParaExcluir.id);
+      if (error) throw error;
+
+      await fetchMovimentacoes();
+      setShowDeleteModal(false);
+      setLancamentoParaExcluir(null);
+    } catch (err) {
+      console.error(err);
+      setError('Não foi possível excluir o lançamento.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const abrirModalExcluir = (mov: CaixaMovimentacao) => {
+    setLancamentoParaExcluir(mov);
+    setShowDeleteModal(true);
   };
 
   const getDateRange = () => {
@@ -250,11 +337,18 @@ export default function Caixa() {
 
   return (
     <Layout>
-      <div className="mb-6">
+      <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-100 flex items-center">
           <Wallet className="h-6 w-6 mr-2" />
           Caixa
         </h1>
+        <button
+          onClick={() => setShowNovoLancamento(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+        >
+          <Plus className="h-5 w-5" />
+          Novo Lançamento
+        </button>
       </div>
 
       {/* Cards de resumo (últimos 3 meses) */}
@@ -431,9 +525,14 @@ export default function Caixa() {
                         </button>
                       </div>
                     ) : (
-                      <button onClick={() => startEditing(mov)} className="text-blue-400 hover:text-blue-300">
-                        <Edit2 className="h-5 w-5" />
-                      </button>
+                      <div className="flex space-x-2">
+                        <button onClick={() => startEditing(mov)} className="text-blue-400 hover:text-blue-300" title="Editar">
+                          <Edit2 className="h-5 w-5" />
+                        </button>
+                        <button onClick={() => abrirModalExcluir(mov)} className="text-red-400 hover:text-red-300" title="Excluir">
+                          <Trash2 className="h-5 w-5" />
+                        </button>
+                      </div>
                     )}
                   </td>
                 </tr>
@@ -538,6 +637,194 @@ export default function Caixa() {
             >
               »»
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Novo Lançamento */}
+      {showNovoLancamento && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-slate-800 rounded-lg shadow-xl border border-slate-700 w-full max-w-md mx-4">
+            <div className="flex items-center justify-between p-4 border-b border-slate-700">
+              <h3 className="text-lg font-semibold text-slate-100 flex items-center gap-2">
+                <Plus className="h-5 w-5 text-green-400" />
+                Novo Lançamento
+              </h3>
+              <button
+                onClick={() => setShowNovoLancamento(false)}
+                className="text-slate-400 hover:text-slate-200"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-4">
+              {/* Data */}
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Data
+                </label>
+                <input
+                  type="date"
+                  value={novoLancamento.data}
+                  onChange={(e) => setNovoLancamento({ ...novoLancamento, data: e.target.value })}
+                  className="w-full border border-slate-700 bg-slate-900 text-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                />
+              </div>
+
+              {/* Tipo */}
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Tipo
+                </label>
+                <div className="flex gap-4">
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="tipo"
+                      value="entrada"
+                      checked={novoLancamento.tipo === 'entrada'}
+                      onChange={(e) => setNovoLancamento({ ...novoLancamento, tipo: e.target.value as 'entrada' | 'saida' })}
+                      className="mr-2 text-blue-600 focus:ring-blue-600"
+                    />
+                    <span className="text-blue-400">Entrada</span>
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="tipo"
+                      value="saida"
+                      checked={novoLancamento.tipo === 'saida'}
+                      onChange={(e) => setNovoLancamento({ ...novoLancamento, tipo: e.target.value as 'entrada' | 'saida' })}
+                      className="mr-2 text-red-600 focus:ring-red-600"
+                    />
+                    <span className="text-red-400">Saída</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Histórico */}
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Histórico / Descrição
+                </label>
+                <input
+                  type="text"
+                  value={novoLancamento.historico}
+                  onChange={(e) => setNovoLancamento({ ...novoLancamento, historico: e.target.value })}
+                  placeholder="Ex: Pagamento de servidor, Taxa de cartão..."
+                  className="w-full border border-slate-700 bg-slate-900 text-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-600 placeholder-slate-500"
+                />
+              </div>
+
+              {/* Valor */}
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Valor (R$)
+                </label>
+                <input
+                  type="text"
+                  value={novoLancamento.valor}
+                  onChange={(e) => setNovoLancamento({ ...novoLancamento, valor: e.target.value })}
+                  placeholder="0,00"
+                  className="w-full border border-slate-700 bg-slate-900 text-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-600 placeholder-slate-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 p-4 border-t border-slate-700">
+              <button
+                onClick={() => setShowNovoLancamento(false)}
+                className="px-4 py-2 text-slate-300 hover:text-slate-100 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={criarLancamento}
+                disabled={isCreating || !novoLancamento.historico || !novoLancamento.valor}
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isCreating ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Salvando...
+                  </>
+                ) : (
+                  <>
+                    <Check className="h-4 w-4" />
+                    Salvar
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmação de Exclusão */}
+      {showDeleteModal && lancamentoParaExcluir && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-slate-800 rounded-lg shadow-xl border border-slate-700 w-full max-w-md mx-4">
+            <div className="flex items-center justify-between p-4 border-b border-slate-700">
+              <h3 className="text-lg font-semibold text-slate-100 flex items-center gap-2">
+                <Trash2 className="h-5 w-5 text-red-400" />
+                Confirmar Exclusão
+              </h3>
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="text-slate-400 hover:text-slate-200"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-4">
+              <p className="text-slate-300 mb-4">
+                Tem certeza que deseja excluir este lançamento?
+              </p>
+              <div className="bg-slate-900 rounded-lg p-4 border border-slate-700">
+                <p className="text-slate-400 text-sm">Data</p>
+                <p className="text-slate-100 mb-2">{formatDateBR(lancamentoParaExcluir.data)}</p>
+                <p className="text-slate-400 text-sm">Histórico</p>
+                <p className="text-slate-100 mb-2">{lancamentoParaExcluir.historico}</p>
+                <p className="text-slate-400 text-sm">Valor</p>
+                <p className={lancamentoParaExcluir.entrada ? 'text-blue-400' : 'text-red-400'}>
+                  {lancamentoParaExcluir.entrada 
+                    ? `+ ${formatCurrency(lancamentoParaExcluir.entrada)}`
+                    : `- ${formatCurrency(lancamentoParaExcluir.saida || 0)}`
+                  }
+                </p>
+              </div>
+              <p className="text-yellow-400 text-sm mt-4">
+                ⚠️ Esta ação não pode ser desfeita.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-3 p-4 border-t border-slate-700">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="px-4 py-2 text-slate-300 hover:text-slate-100 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={excluirLancamento}
+                disabled={isDeleting}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isDeleting ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Excluindo...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-4 w-4" />
+                    Excluir
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
