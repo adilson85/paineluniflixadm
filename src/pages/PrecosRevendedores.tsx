@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { DollarSign, Edit2, X, Check, Monitor, Plus } from 'lucide-react';
+import { DollarSign, Edit2, X, Check, Monitor, Plus, Trash2 } from 'lucide-react';
 import Layout from '../components/Layout';
 import { supabase } from '../lib/supabase';
 import type { ResellerPricing } from '../types';
@@ -11,6 +11,8 @@ export default function PrecosRevendedores() {
   const [editingPricing, setEditingPricing] = useState<ResellerPricing | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedPanel, setSelectedPanel] = useState<string | null>(null);
+  const [deletingPricing, setDeletingPricing] = useState<ResellerPricing | null>(null);
+  const [deletingPanel, setDeletingPanel] = useState<{ name: string; display_name: string } | null>(null);
   const [newPricing, setNewPricing] = useState({
     panel_name: '',
     min_quantity: 10,
@@ -128,6 +130,53 @@ export default function PrecosRevendedores() {
     } catch (err) {
       console.error('Error updating pricing:', err);
       setError('Erro ao atualizar preço. Por favor, tente novamente.');
+    }
+  };
+
+  const handleDeletePricing = async (pricingItem: ResellerPricing) => {
+    try {
+      setError(null);
+      const { error: deleteError } = await supabase
+        .from('reseller_pricing')
+        .delete()
+        .eq('id', pricingItem.id);
+
+      if (deleteError) throw deleteError;
+
+      await fetchPricing();
+      setDeletingPricing(null);
+    } catch (err) {
+      console.error('Error deleting pricing:', err);
+      setError('Erro ao excluir faixa de preço. Por favor, tente novamente.');
+    }
+  };
+
+  const handleDeletePanel = async (panel: { name: string; display_name: string }) => {
+    try {
+      setError(null);
+
+      // Primeiro, excluir todas as faixas de preço deste painel
+      const { error: pricingDeleteError } = await supabase
+        .from('reseller_pricing')
+        .delete()
+        .eq('panel_name', panel.name);
+
+      if (pricingDeleteError) throw pricingDeleteError;
+
+      // Depois, desativar ou excluir o painel
+      const { error: panelDeleteError } = await supabase
+        .from('panels')
+        .delete()
+        .eq('name', panel.name);
+
+      if (panelDeleteError) throw panelDeleteError;
+
+      await fetchPanels();
+      await fetchPricing();
+      setDeletingPanel(null);
+    } catch (err) {
+      console.error('Error deleting panel:', err);
+      setError('Erro ao excluir painel. Por favor, tente novamente.');
     }
   };
 
@@ -270,23 +319,32 @@ export default function PrecosRevendedores() {
                     <Monitor className="h-5 w-5 mr-2 text-blue-400" />
                     <h3 className="text-lg font-semibold text-slate-100">{panel.display_name}</h3>
                   </div>
-                  <button
-                    onClick={() => {
-                      setSelectedPanel(panel.name);
-                      setNewPricing({
-                        panel_name: panel.name,
-                        min_quantity: 10,
-                        max_quantity: null,
-                        price_per_credit: 0,
-                        active: true
-                      });
-                      setShowAddModal(true);
-                    }}
-                    className="flex items-center px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
-                  >
-                    <Plus className="h-4 w-4 mr-1" />
-                    Adicionar Faixa
-                  </button>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => {
+                        setSelectedPanel(panel.name);
+                        setNewPricing({
+                          panel_name: panel.name,
+                          min_quantity: 10,
+                          max_quantity: null,
+                          price_per_credit: 0,
+                          active: true
+                        });
+                        setShowAddModal(true);
+                      }}
+                      className="flex items-center px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      Adicionar Faixa
+                    </button>
+                    <button
+                      onClick={() => setDeletingPanel(panel)}
+                      className="flex items-center px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm"
+                      title="Excluir Painel"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
                 
                 <div className="overflow-x-auto">
@@ -315,6 +373,7 @@ export default function PrecosRevendedores() {
                             onEdit={() => setEditingPricing(item)}
                             onCancel={() => setEditingPricing(null)}
                             onSave={handleUpdatePricing}
+                            onDelete={() => setDeletingPricing(item)}
                             formatCurrency={formatCurrency}
                             formatQuantityRange={formatQuantityRange}
                           />
@@ -492,6 +551,70 @@ export default function PrecosRevendedores() {
           </div>
         </div>
       )}
+
+      {/* Modal Confirmar Exclusão de Faixa */}
+      {deletingPricing && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-lg p-6 max-w-md w-full border border-slate-700">
+            <h3 className="text-xl font-semibold text-slate-100 mb-4">
+              Confirmar Exclusão
+            </h3>
+            <p className="text-slate-300 mb-6">
+              Tem certeza que deseja excluir a faixa de preço <strong>{formatQuantityRange(deletingPricing.min_quantity, deletingPricing.max_quantity)}</strong> do painel <strong>{panels.find(p => p.name === deletingPricing.panel_name)?.display_name || deletingPricing.panel_name}</strong>?
+            </p>
+            <div className="flex justify-end space-x-2">
+              <button
+                onClick={() => setDeletingPricing(null)}
+                className="px-4 py-2 bg-slate-700 text-slate-200 rounded-lg hover:bg-slate-600"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => handleDeletePricing(deletingPricing)}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+              >
+                Excluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Confirmar Exclusão de Painel */}
+      {deletingPanel && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-lg p-6 max-w-md w-full border border-slate-700 border-red-500">
+            <h3 className="text-xl font-semibold text-red-400 mb-4 flex items-center">
+              <Trash2 className="h-6 w-6 mr-2" />
+              Excluir Painel Completo
+            </h3>
+            <div className="bg-red-900/20 border border-red-700 rounded-lg p-4 mb-4">
+              <p className="text-red-200 font-semibold mb-2">⚠️ Atenção: Esta ação é irreversível!</p>
+              <p className="text-slate-300 text-sm">
+                Ao excluir este painel, todas as faixas de preço associadas também serão excluídas permanentemente.
+              </p>
+            </div>
+            <p className="text-slate-300 mb-6">
+              Tem certeza que deseja excluir o painel <strong className="text-red-400">{deletingPanel.display_name}</strong> e todas as suas <strong>{pricing.filter(p => p.panel_name === deletingPanel.name).length} faixas de preço</strong>?
+            </p>
+            <div className="flex justify-end space-x-2">
+              <button
+                onClick={() => setDeletingPanel(null)}
+                className="px-4 py-2 bg-slate-700 text-slate-200 rounded-lg hover:bg-slate-600"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => handleDeletePanel(deletingPanel)}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Excluir Painel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }
@@ -502,6 +625,7 @@ function PricingRow({
   onEdit,
   onCancel,
   onSave,
+  onDelete,
   formatCurrency,
   formatQuantityRange
 }: {
@@ -510,6 +634,7 @@ function PricingRow({
   onEdit: () => void;
   onCancel: () => void;
   onSave: (item: ResellerPricing) => void;
+  onDelete: () => void;
   formatCurrency: (value: number) => string;
   formatQuantityRange: (min: number, max: number | null) => string;
 }) {
@@ -585,6 +710,7 @@ function PricingRow({
             <button
               onClick={() => onSave({ ...item, ...formData })}
               className="text-green-400 hover:text-green-300"
+              title="Salvar"
             >
               <Check className="h-5 w-5" />
             </button>
@@ -599,17 +725,28 @@ function PricingRow({
                 });
               }}
               className="text-red-400 hover:text-red-300"
+              title="Cancelar"
             >
               <X className="h-5 w-5" />
             </button>
           </div>
         ) : (
-          <button
-            onClick={onEdit}
-            className="text-blue-400 hover:text-blue-300"
-          >
-            <Edit2 className="h-5 w-5" />
-          </button>
+          <div className="flex space-x-2">
+            <button
+              onClick={onEdit}
+              className="text-blue-400 hover:text-blue-300"
+              title="Editar"
+            >
+              <Edit2 className="h-5 w-5" />
+            </button>
+            <button
+              onClick={onDelete}
+              className="text-red-400 hover:text-red-300"
+              title="Excluir"
+            >
+              <Trash2 className="h-5 w-5" />
+            </button>
+          </div>
         )}
       </td>
     </tr>

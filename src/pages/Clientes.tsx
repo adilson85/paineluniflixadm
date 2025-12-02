@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { supabase } from '../lib/supabase';
 import type { Client, User, Subscription } from '../types';
-import { transformUserToClient, getPlanType, formatPhone } from '../utils/clientHelpers';
+import { transformUserToClient, getPlanType, formatPhone, toE164, isValidCPF, formatCPF } from '../utils/clientHelpers';
 import { formatDateBR } from '../utils/dateUtils';
 
 export default function Clientes() {
@@ -16,6 +16,8 @@ export default function Clientes() {
   const [showNovoClienteModal, setShowNovoClienteModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [availablePanels, setAvailablePanels] = useState<Array<{ name: string; display_name: string }>>([]);
+  const [phoneError, setPhoneError] = useState('');
+  const [cpfError, setCpfError] = useState('');
   const [novoClienteForm, setNovoClienteForm] = useState({
     full_name: '',
     email: '',
@@ -63,6 +65,96 @@ export default function Clientes() {
       ]);
     }
   }
+
+  // Função para formatar telefone com máscara
+  const handlePhoneChange = (value: string) => {
+    // Remove tudo que não é número
+    const numbers = value.replace(/\D/g, '');
+
+    // Limita a 11 dígitos
+    const limited = numbers.slice(0, 11);
+
+    // Aplica máscara diferenciando fixo (10 dígitos) de celular (11 dígitos)
+    let formatted = limited;
+    if (limited.length <= 10) {
+      // Telefone fixo: (DD) DDDD-DDDD
+      if (limited.length > 2) {
+        formatted = `(${limited.slice(0, 2)}) ${limited.slice(2)}`;
+      }
+      if (limited.length > 6) {
+        formatted = `(${limited.slice(0, 2)}) ${limited.slice(2, 6)}-${limited.slice(6, 10)}`;
+      }
+    } else {
+      // Telefone celular: (DD) DDDDD-DDDD
+      if (limited.length > 2) {
+        formatted = `(${limited.slice(0, 2)}) ${limited.slice(2)}`;
+      }
+      if (limited.length > 7) {
+        formatted = `(${limited.slice(0, 2)}) ${limited.slice(2, 7)}-${limited.slice(7, 11)}`;
+      }
+    }
+
+    setNovoClienteForm({ ...novoClienteForm, phone: formatted });
+
+    // Valida telefone
+    if (limited.length > 0 && limited.length < 10) {
+      setPhoneError('Telefone incompleto');
+    } else if (limited.length === 10 || limited.length === 11) {
+      // Verifica se é um número de celular (terceiro dígito é 6, 7, 8 ou 9)
+      const thirdDigit = limited.length >= 3 ? limited[2] : '';
+      const isCellPhone = ['6', '7', '8', '9'].includes(thirdDigit);
+
+      // Se parece ser celular mas tem apenas 10 dígitos, está incompleto
+      if (isCellPhone && limited.length === 10) {
+        setPhoneError('Celular incompleto - falta o 9 na frente');
+      } else {
+        const phoneE164 = toE164(formatted);
+        if (phoneE164) {
+          setPhoneError('');
+        } else {
+          setPhoneError('Telefone inválido');
+        }
+      }
+    } else {
+      setPhoneError('');
+    }
+  };
+
+  // Função para formatar CPF com máscara
+  const handleCpfChange = (value: string) => {
+    // Remove tudo que não é número
+    const numbers = value.replace(/\D/g, '');
+
+    // Limita a 11 dígitos
+    const limited = numbers.slice(0, 11);
+
+    // Aplica máscara: 000.000.000-00
+    let formatted = limited;
+    if (limited.length > 3) {
+      formatted = `${limited.slice(0, 3)}.${limited.slice(3)}`;
+    }
+    if (limited.length > 6) {
+      formatted = `${limited.slice(0, 3)}.${limited.slice(3, 6)}.${limited.slice(6)}`;
+    }
+    if (limited.length > 9) {
+      formatted = `${limited.slice(0, 3)}.${limited.slice(3, 6)}.${limited.slice(6, 9)}-${limited.slice(9, 11)}`;
+    }
+
+    setNovoClienteForm({ ...novoClienteForm, cpf: formatted });
+
+    // Valida CPF
+    if (limited.length > 0 && limited.length < 11) {
+      setCpfError('CPF incompleto');
+    } else if (limited.length === 11) {
+      if (isValidCPF(formatted)) {
+        setCpfError('');
+      } else {
+        setCpfError('CPF inválido');
+      }
+    } else {
+      setCpfError('');
+    }
+  };
 
   // Função movida para utils/clientHelpers.ts
 
@@ -266,6 +358,8 @@ export default function Clientes() {
               <button
                 onClick={() => {
                   setShowNovoClienteModal(false);
+                  setPhoneError('');
+                  setCpfError('');
                   setNovoClienteForm({
                     full_name: '',
                     email: '',
@@ -293,13 +387,35 @@ export default function Clientes() {
             <form
               onSubmit={async (e) => {
                 e.preventDefault();
+
+                // Validação antes de salvar
+                if (phoneError) {
+                  alert('Por favor, corrija o telefone antes de salvar.');
+                  return;
+                }
+                if (cpfError) {
+                  alert('Por favor, corrija o CPF antes de salvar.');
+                  return;
+                }
+
                 setIsSaving(true);
                 try {
+                  // Converter telefone para E.164 se fornecido
+                  let phoneE164 = null;
+                  if (novoClienteForm.phone) {
+                    phoneE164 = toE164(novoClienteForm.phone);
+                    if (!phoneE164) {
+                      alert('Telefone inválido. Use o formato (DDD) 99999-9999');
+                      setIsSaving(false);
+                      return;
+                    }
+                  }
+
                   // Usar função RPC para criar o cliente
                   const { data: userId, error: rpcError } = await supabase.rpc('create_client', {
                     p_full_name: novoClienteForm.full_name,
                     p_email: novoClienteForm.email || null,
-                    p_phone: novoClienteForm.phone || null,
+                    p_phone: phoneE164,
                     p_cpf: novoClienteForm.cpf || null,
                     p_data_nascimento: novoClienteForm.data_nascimento || null,
                   });
@@ -357,9 +473,11 @@ export default function Clientes() {
 
                   // Recarregar lista de clientes
                   await fetchClients();
-                  
+
                   // Fechar modal e limpar formulário
                   setShowNovoClienteModal(false);
+                  setPhoneError('');
+                  setCpfError('');
                   setNovoClienteForm({
                     full_name: '',
                     email: '',
@@ -418,11 +536,23 @@ export default function Clientes() {
                 </label>
                 <input
                   type="tel"
+                  placeholder="(00) 00000-0000"
+                  className={`w-full px-3 py-2 bg-slate-900 border rounded-lg text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 transition-colors ${
+                    phoneError
+                      ? 'border-red-500 focus:ring-red-500'
+                      : novoClienteForm.phone && !phoneError
+                      ? 'border-green-500 focus:ring-green-500'
+                      : 'border-slate-700 focus:ring-blue-600'
+                  }`}
                   value={novoClienteForm.phone}
-                  onChange={(e) => setNovoClienteForm({ ...novoClienteForm, phone: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  placeholder="(11) 99999-9999"
+                  onChange={(e) => handlePhoneChange(e.target.value)}
                 />
+                {phoneError && (
+                  <p className="text-xs text-red-400 mt-1">{phoneError}</p>
+                )}
+                {novoClienteForm.phone && !phoneError && (
+                  <p className="text-xs text-green-400 mt-1">✓ Telefone válido</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-1">
@@ -430,11 +560,23 @@ export default function Clientes() {
                 </label>
                 <input
                   type="text"
-                  value={novoClienteForm.cpf}
-                  onChange={(e) => setNovoClienteForm({ ...novoClienteForm, cpf: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   placeholder="000.000.000-00"
+                  className={`w-full px-3 py-2 bg-slate-900 border rounded-lg text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 transition-colors ${
+                    cpfError
+                      ? 'border-red-500 focus:ring-red-500'
+                      : novoClienteForm.cpf && !cpfError
+                      ? 'border-green-500 focus:ring-green-500'
+                      : 'border-slate-700 focus:ring-blue-600'
+                  }`}
+                  value={novoClienteForm.cpf}
+                  onChange={(e) => handleCpfChange(e.target.value)}
                 />
+                {cpfError && (
+                  <p className="text-xs text-red-400 mt-1">{cpfError}</p>
+                )}
+                {novoClienteForm.cpf && !cpfError && (
+                  <p className="text-xs text-green-400 mt-1">✓ CPF válido</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-1">
@@ -612,6 +754,8 @@ export default function Clientes() {
                   type="button"
                   onClick={() => {
                     setShowNovoClienteModal(false);
+                    setPhoneError('');
+                    setCpfError('');
                     setNovoClienteForm({
                       full_name: '',
                       email: '',
@@ -637,7 +781,7 @@ export default function Clientes() {
                 </button>
                 <button
                   type="submit"
-                  disabled={isSaving}
+                  disabled={isSaving || phoneError !== '' || cpfError !== ''}
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isSaving ? 'Salvando...' : 'Salvar'}

@@ -3,7 +3,7 @@ import { Users, Plus, Edit2, X, Check, CreditCard, Search, Filter, Monitor } fro
 import Layout from '../components/Layout';
 import { supabase } from '../lib/supabase';
 import type { Reseller, ResellerPanel, ResellerWithPanels, ResellerPricing } from '../types';
-import { formatPhone } from '../utils/clientHelpers';
+import { formatPhone, toE164, formatCPF, isValidCPF } from '../utils/clientHelpers';
 
 export default function Revendedores() {
   const [resellers, setResellers] = useState<ResellerWithPanels[]>([]);
@@ -15,6 +15,8 @@ export default function Revendedores() {
   const [showRechargeModal, setShowRechargeModal] = useState(false);
   const [selectedReseller, setSelectedReseller] = useState<ResellerWithPanels | null>(null);
   const [editingReseller, setEditingReseller] = useState<Partial<Reseller> | null>(null);
+  const [phoneError, setPhoneError] = useState<string>('');
+  const [cpfError, setCpfError] = useState<string>('');
   const [rechargeData, setRechargeData] = useState({
     panel_name: '',
     quantity: 10,
@@ -53,6 +55,96 @@ export default function Revendedores() {
     }
   }
 
+  // Função para formatar telefone com máscara
+  const handlePhoneChange = (value: string) => {
+    // Remove tudo que não é número
+    const numbers = value.replace(/\D/g, '');
+
+    // Limita a 11 dígitos
+    const limited = numbers.slice(0, 11);
+
+    // Aplica máscara diferenciando fixo (10 dígitos) de celular (11 dígitos)
+    let formatted = limited;
+    if (limited.length <= 10) {
+      // Telefone fixo: (DD) DDDD-DDDD
+      if (limited.length > 2) {
+        formatted = `(${limited.slice(0, 2)}) ${limited.slice(2)}`;
+      }
+      if (limited.length > 6) {
+        formatted = `(${limited.slice(0, 2)}) ${limited.slice(2, 6)}-${limited.slice(6, 10)}`;
+      }
+    } else {
+      // Telefone celular: (DD) DDDDD-DDDD
+      if (limited.length > 2) {
+        formatted = `(${limited.slice(0, 2)}) ${limited.slice(2)}`;
+      }
+      if (limited.length > 7) {
+        formatted = `(${limited.slice(0, 2)}) ${limited.slice(2, 7)}-${limited.slice(7, 11)}`;
+      }
+    }
+
+    setEditingReseller({ ...editingReseller, phone: formatted });
+
+    // Valida telefone
+    if (limited.length > 0 && limited.length < 10) {
+      setPhoneError('Telefone incompleto');
+    } else if (limited.length === 10 || limited.length === 11) {
+      // Verifica se é um número de celular (terceiro dígito é 6, 7, 8 ou 9)
+      const thirdDigit = limited.length >= 3 ? limited[2] : '';
+      const isCellPhone = ['6', '7', '8', '9'].includes(thirdDigit);
+
+      // Se parece ser celular mas tem apenas 10 dígitos, está incompleto
+      if (isCellPhone && limited.length === 10) {
+        setPhoneError('Celular incompleto - falta o 9 na frente');
+      } else {
+        const phoneE164 = toE164(formatted);
+        if (phoneE164) {
+          setPhoneError('');
+        } else {
+          setPhoneError('Telefone inválido');
+        }
+      }
+    } else {
+      setPhoneError('');
+    }
+  };
+
+  // Função para formatar CPF com máscara
+  const handleCpfChange = (value: string) => {
+    // Remove tudo que não é número
+    const numbers = value.replace(/\D/g, '');
+
+    // Limita a 11 dígitos
+    const limited = numbers.slice(0, 11);
+
+    // Aplica máscara
+    let formatted = limited;
+    if (limited.length > 3) {
+      formatted = `${limited.slice(0, 3)}.${limited.slice(3)}`;
+    }
+    if (limited.length > 6) {
+      formatted = `${limited.slice(0, 3)}.${limited.slice(3, 6)}.${limited.slice(6)}`;
+    }
+    if (limited.length > 9) {
+      formatted = `${limited.slice(0, 3)}.${limited.slice(3, 6)}.${limited.slice(6, 9)}-${limited.slice(9)}`;
+    }
+
+    setEditingReseller({ ...editingReseller, cpf: formatted });
+
+    // Valida CPF
+    if (limited.length > 0 && limited.length < 11) {
+      setCpfError('CPF incompleto');
+    } else if (limited.length === 11) {
+      if (isValidCPF(formatted)) {
+        setCpfError('');
+      } else {
+        setCpfError('CPF inválido');
+      }
+    } else {
+      setCpfError('');
+    }
+  };
+
   async function fetchResellers() {
     try {
       setError(null);
@@ -81,6 +173,28 @@ export default function Revendedores() {
       return;
     }
 
+    // Validar telefone se fornecido
+    if (editingReseller.phone && phoneError) {
+      setError(phoneError);
+      return;
+    }
+
+    // Validar CPF se fornecido
+    if (editingReseller.cpf && cpfError) {
+      setError(cpfError);
+      return;
+    }
+
+    // Converter telefone para E.164 se fornecido
+    let phoneE164 = null;
+    if (editingReseller.phone) {
+      phoneE164 = toE164(editingReseller.phone);
+      if (!phoneE164) {
+        setError('Telefone inválido. Use o formato (DDD) 99999-9999');
+        return;
+      }
+    }
+
     try {
       setError(null);
       const { data: newReseller, error: createError } = await supabase
@@ -88,7 +202,7 @@ export default function Revendedores() {
         .insert({
           name: editingReseller.name,
           email: editingReseller.email || null,
-          phone: editingReseller.phone || null,
+          phone: phoneE164,
           cpf: editingReseller.cpf || null,
           status: editingReseller.status || 'active'
         })
@@ -112,6 +226,28 @@ export default function Revendedores() {
       return;
     }
 
+    // Validar telefone se fornecido
+    if (editingReseller.phone && phoneError) {
+      setError(phoneError);
+      return;
+    }
+
+    // Validar CPF se fornecido
+    if (editingReseller.cpf && cpfError) {
+      setError(cpfError);
+      return;
+    }
+
+    // Converter telefone para E.164 se fornecido
+    let phoneE164 = null;
+    if (editingReseller.phone) {
+      phoneE164 = toE164(editingReseller.phone);
+      if (!phoneE164) {
+        setError('Telefone inválido. Use o formato (DDD) 99999-9999');
+        return;
+      }
+    }
+
     try {
       setError(null);
       const { error: updateError } = await supabase
@@ -119,7 +255,7 @@ export default function Revendedores() {
         .update({
           name: editingReseller.name,
           email: editingReseller.email || null,
-          phone: editingReseller.phone || null,
+          phone: phoneE164,
           cpf: editingReseller.cpf || null,
           status: editingReseller.status || 'active'
         })
@@ -394,6 +530,9 @@ export default function Revendedores() {
         <button
           onClick={() => {
             setEditingReseller({ status: 'active' });
+            setPhoneError('');
+            setCpfError('');
+            setError(null);
             setShowModal(true);
           }}
           className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
@@ -484,7 +623,15 @@ export default function Revendedores() {
                   </button>
                   <button
                     onClick={() => {
-                      setEditingReseller(reseller);
+                      // Formatar telefone e CPF antes de editar
+                      const formattedReseller = {
+                        ...reseller,
+                        phone: reseller.phone ? formatPhone(reseller.phone) : '',
+                        cpf: reseller.cpf ? formatCPF(reseller.cpf) : ''
+                      };
+                      setEditingReseller(formattedReseller);
+                      setPhoneError('');
+                      setCpfError('');
                       setShowModal(true);
                     }}
                     className="text-blue-400 hover:text-blue-300"
@@ -572,43 +719,84 @@ export default function Revendedores() {
             <h3 className="text-xl font-semibold text-slate-100 mb-4">
               {editingReseller.id ? 'Editar Revendedor' : 'Novo Revendedor'}
             </h3>
+
+            {error && (
+              <div className="mb-4 p-3 bg-red-900/20 border border-red-700 rounded-lg">
+                <p className="text-sm text-red-400">{error}</p>
+              </div>
+            )}
+
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Nome *</label>
+                <label className="block text-sm font-medium text-slate-300 mb-1">
+                  Nome <span className="text-red-400">*</span>
+                </label>
                 <input
                   type="text"
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  placeholder="Digite o nome completo"
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   value={editingReseller.name || ''}
                   onChange={(e) => setEditingReseller({ ...editingReseller, name: e.target.value })}
                 />
               </div>
+
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-1">Email</label>
                 <input
                   type="email"
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  placeholder="exemplo@email.com"
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   value={editingReseller.email || ''}
                   onChange={(e) => setEditingReseller({ ...editingReseller, email: e.target.value })}
                 />
               </div>
+
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-1">Telefone</label>
                 <input
                   type="text"
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  placeholder="(00) 00000-0000"
+                  className={`w-full px-3 py-2 bg-slate-900 border rounded-lg text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 transition-colors ${
+                    phoneError
+                      ? 'border-red-500 focus:ring-red-500'
+                      : editingReseller.phone && !phoneError
+                      ? 'border-green-500 focus:ring-green-500'
+                      : 'border-slate-700 focus:ring-blue-600'
+                  }`}
                   value={editingReseller.phone || ''}
-                  onChange={(e) => setEditingReseller({ ...editingReseller, phone: e.target.value })}
+                  onChange={(e) => handlePhoneChange(e.target.value)}
                 />
+                {phoneError && (
+                  <p className="text-xs text-red-400 mt-1">{phoneError}</p>
+                )}
+                {editingReseller.phone && !phoneError && (
+                  <p className="text-xs text-green-400 mt-1">✓ Telefone válido</p>
+                )}
               </div>
+
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-1">CPF</label>
                 <input
                   type="text"
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  placeholder="000.000.000-00"
+                  className={`w-full px-3 py-2 bg-slate-900 border rounded-lg text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 transition-colors ${
+                    cpfError
+                      ? 'border-red-500 focus:ring-red-500'
+                      : editingReseller.cpf && !cpfError
+                      ? 'border-green-500 focus:ring-green-500'
+                      : 'border-slate-700 focus:ring-blue-600'
+                  }`}
                   value={editingReseller.cpf || ''}
-                  onChange={(e) => setEditingReseller({ ...editingReseller, cpf: e.target.value })}
+                  onChange={(e) => handleCpfChange(e.target.value)}
                 />
+                {cpfError && (
+                  <p className="text-xs text-red-400 mt-1">{cpfError}</p>
+                )}
+                {editingReseller.cpf && !cpfError && (
+                  <p className="text-xs text-green-400 mt-1">✓ CPF válido</p>
+                )}
               </div>
+
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-1">Status</label>
                 <select
@@ -622,19 +810,24 @@ export default function Revendedores() {
                 </select>
               </div>
             </div>
+
             <div className="flex justify-end space-x-2 mt-6">
               <button
                 onClick={() => {
                   setShowModal(false);
                   setEditingReseller(null);
+                  setPhoneError('');
+                  setCpfError('');
+                  setError(null);
                 }}
-                className="px-4 py-2 bg-slate-700 text-slate-200 rounded-lg hover:bg-slate-600"
+                className="px-4 py-2 bg-slate-700 text-slate-200 rounded-lg hover:bg-slate-600 transition-colors"
               >
                 Cancelar
               </button>
               <button
                 onClick={editingReseller.id ? handleUpdateReseller : handleCreateReseller}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                disabled={!!phoneError || !!cpfError}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {editingReseller.id ? 'Atualizar' : 'Criar'}
               </button>

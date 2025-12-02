@@ -194,6 +194,36 @@ export function formatCPF(cpf: string): string {
 }
 
 /**
+ * Converte qualquer formato de telefone para E.164 padrão (+5547989167448)
+ * Este deve ser o formato usado para SALVAR no banco de dados
+ */
+export function toE164(phone: string): string | null {
+  if (!phone) return null;
+
+  // Remove caracteres não numéricos
+  let cleaned = phone.replace(/\D/g, '');
+
+  // Remove DDI 55 se já estiver presente
+  if (cleaned.startsWith('55') && cleaned.length > 11) {
+    cleaned = cleaned.substring(2);
+  }
+
+  // Valida se tem 10 ou 11 dígitos (DDD + número)
+  if (cleaned.length !== 10 && cleaned.length !== 11) {
+    return null;
+  }
+
+  // Valida se o DDD é válido (11-99)
+  const ddd = parseInt(cleaned.substring(0, 2));
+  if (ddd < 11 || ddd > 99) {
+    return null;
+  }
+
+  // Retorna no formato E.164: +55DDNNNNNNNNN
+  return '+55' + cleaned;
+}
+
+/**
  * Formata um telefone para exibição
  * Remove DDI (55) e exibe apenas no formato brasileiro (DDD) 99999-9999
  */

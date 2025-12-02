@@ -2,6 +2,7 @@ import { X, Edit, Eye, EyeOff } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import type { OfflineClient } from '../../types';
+import { toE164, isValidCPF, formatCPF } from '../../utils/clientHelpers';
 
 interface EditarClienteOfflineModalProps {
   isOpen: boolean;
@@ -16,6 +17,9 @@ export function EditarClienteOfflineModal({
   onSuccess,
   client,
 }: EditarClienteOfflineModalProps) {
+  const [phoneError, setPhoneError] = useState('');
+  const [cpfError, setCpfError] = useState('');
+
   const [formData, setFormData] = useState({
     nome: '',
     telefone: '',
@@ -92,6 +96,8 @@ export function EditarClienteOfflineModal({
         valor_mensal: client.valor_mensal?.toString() || '',
       });
       setError(null);
+      setPhoneError('');
+      setCpfError('');
     }
   }, [isOpen, client]);
 
@@ -101,6 +107,96 @@ export function EditarClienteOfflineModal({
 
   const handleChange = (field: keyof typeof formData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  // Função para formatar telefone com máscara
+  const handlePhoneChange = (value: string) => {
+    // Remove tudo que não é número
+    const numbers = value.replace(/\D/g, '');
+
+    // Limita a 11 dígitos
+    const limited = numbers.slice(0, 11);
+
+    // Aplica máscara diferenciando fixo (10 dígitos) de celular (11 dígitos)
+    let formatted = limited;
+    if (limited.length <= 10) {
+      // Telefone fixo: (DD) DDDD-DDDD
+      if (limited.length > 2) {
+        formatted = `(${limited.slice(0, 2)}) ${limited.slice(2)}`;
+      }
+      if (limited.length > 6) {
+        formatted = `(${limited.slice(0, 2)}) ${limited.slice(2, 6)}-${limited.slice(6, 10)}`;
+      }
+    } else {
+      // Telefone celular: (DD) DDDDD-DDDD
+      if (limited.length > 2) {
+        formatted = `(${limited.slice(0, 2)}) ${limited.slice(2)}`;
+      }
+      if (limited.length > 7) {
+        formatted = `(${limited.slice(0, 2)}) ${limited.slice(2, 7)}-${limited.slice(7, 11)}`;
+      }
+    }
+
+    setFormData(prev => ({ ...prev, telefone: formatted }));
+
+    // Valida telefone
+    if (limited.length > 0 && limited.length < 10) {
+      setPhoneError('Telefone incompleto');
+    } else if (limited.length === 10 || limited.length === 11) {
+      // Verifica se é um número de celular (terceiro dígito é 6, 7, 8 ou 9)
+      const thirdDigit = limited.length >= 3 ? limited[2] : '';
+      const isCellPhone = ['6', '7', '8', '9'].includes(thirdDigit);
+
+      // Se parece ser celular mas tem apenas 10 dígitos, está incompleto
+      if (isCellPhone && limited.length === 10) {
+        setPhoneError('Celular incompleto - falta o 9 na frente');
+      } else {
+        const phoneE164 = toE164(formatted);
+        if (phoneE164) {
+          setPhoneError('');
+        } else {
+          setPhoneError('Telefone inválido');
+        }
+      }
+    } else {
+      setPhoneError('');
+    }
+  };
+
+  // Função para formatar CPF com máscara
+  const handleCpfChange = (value: string) => {
+    // Remove tudo que não é número
+    const numbers = value.replace(/\D/g, '');
+
+    // Limita a 11 dígitos
+    const limited = numbers.slice(0, 11);
+
+    // Aplica máscara: 000.000.000-00
+    let formatted = limited;
+    if (limited.length > 3) {
+      formatted = `${limited.slice(0, 3)}.${limited.slice(3)}`;
+    }
+    if (limited.length > 6) {
+      formatted = `${limited.slice(0, 3)}.${limited.slice(3, 6)}.${limited.slice(6)}`;
+    }
+    if (limited.length > 9) {
+      formatted = `${limited.slice(0, 3)}.${limited.slice(3, 6)}.${limited.slice(6, 9)}-${limited.slice(9, 11)}`;
+    }
+
+    setFormData(prev => ({ ...prev, cpf: formatted }));
+
+    // Valida CPF
+    if (limited.length > 0 && limited.length < 11) {
+      setCpfError('CPF incompleto');
+    } else if (limited.length === 11) {
+      if (isValidCPF(formatted)) {
+        setCpfError('');
+      } else {
+        setCpfError('CPF inválido');
+      }
+    } else {
+      setCpfError('');
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -123,6 +219,24 @@ export function EditarClienteOfflineModal({
       return;
     }
 
+    // Validação de erros de formato
+    if (phoneError) {
+      setError('Por favor, corrija o telefone antes de salvar.');
+      return;
+    }
+
+    if (cpfError) {
+      setError('Por favor, corrija o CPF antes de salvar.');
+      return;
+    }
+
+    // Converter telefone para E.164
+    const telefoneE164 = toE164(formData.telefone);
+    if (!telefoneE164) {
+      setError('Telefone inválido. Use o formato (DDD) 99999-9999');
+      return;
+    }
+
     const hasLogin1 = formData.login_01.trim() && formData.senha_01.trim();
     const hasLogin2 = formData.login_02.trim() && formData.senha_02.trim();
     const hasLogin3 = formData.login_03.trim() && formData.senha_03.trim();
@@ -140,7 +254,7 @@ export function EditarClienteOfflineModal({
         .from('offline_clients')
         .update({
           nome: formData.nome.trim(),
-          telefone: formData.telefone.trim(),
+          telefone: telefoneE164,
           cpf: formData.cpf.trim() || null,
           email: formData.email.trim() || null,
           id_botconversa: formData.id_botconversa ? parseInt(formData.id_botconversa) : null,
@@ -222,21 +336,47 @@ export function EditarClienteOfflineModal({
               </label>
               <input
                 type="text"
+                placeholder="(00) 00000-0000"
+                className={`w-full px-4 py-2 rounded-md bg-slate-900 border text-slate-200 placeholder-slate-500 transition-colors ${
+                  phoneError
+                    ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
+                    : formData.telefone && !phoneError
+                    ? 'border-green-500 focus:border-green-500 focus:ring-green-500'
+                    : 'border-slate-700 focus:border-blue-500 focus:ring-blue-500'
+                }`}
                 value={formData.telefone}
-                onChange={(e) => handleChange('telefone', e.target.value)}
-                className="w-full px-4 py-2 rounded-md bg-slate-900 border border-slate-700 text-slate-200 focus:border-blue-500 focus:ring-blue-500"
+                onChange={(e) => handlePhoneChange(e.target.value)}
                 required
               />
+              {phoneError && (
+                <p className="text-xs text-red-400 mt-1">{phoneError}</p>
+              )}
+              {formData.telefone && !phoneError && (
+                <p className="text-xs text-green-400 mt-1">✓ Telefone válido</p>
+              )}
             </div>
 
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">CPF</label>
               <input
                 type="text"
+                placeholder="000.000.000-00"
+                className={`w-full px-4 py-2 rounded-md bg-slate-900 border text-slate-200 placeholder-slate-500 transition-colors ${
+                  cpfError
+                    ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
+                    : formData.cpf && !cpfError
+                    ? 'border-green-500 focus:border-green-500 focus:ring-green-500'
+                    : 'border-slate-700 focus:border-blue-500 focus:ring-blue-500'
+                }`}
                 value={formData.cpf}
-                onChange={(e) => handleChange('cpf', e.target.value)}
-                className="w-full px-4 py-2 rounded-md bg-slate-900 border border-slate-700 text-slate-200 focus:border-blue-500 focus:ring-blue-500"
+                onChange={(e) => handleCpfChange(e.target.value)}
               />
+              {cpfError && (
+                <p className="text-xs text-red-400 mt-1">{cpfError}</p>
+              )}
+              {formData.cpf && !cpfError && (
+                <p className="text-xs text-green-400 mt-1">✓ CPF válido</p>
+              )}
             </div>
 
             <div>
@@ -440,8 +580,9 @@ export function EditarClienteOfflineModal({
             </button>
             <button
               type="submit"
-              disabled={isProcessing}
+              disabled={isProcessing || phoneError !== '' || cpfError !== ''}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title={phoneError || cpfError ? 'Corrija os erros antes de salvar' : ''}
             >
               {isProcessing ? 'Salvando...' : 'Salvar Alterações'}
             </button>
@@ -451,6 +592,10 @@ export function EditarClienteOfflineModal({
     </div>
   );
 }
+
+
+
+
 
 
 
