@@ -1,10 +1,17 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Search, Filter, CalendarDays, Edit2, X, Check, Plus, Copy, CheckCircle2, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Filter, CalendarDays, Edit2, X, Check, Plus, Copy, CheckCircle2, Trash2, ChevronLeft, ChevronRight, Users } from 'lucide-react';
 import Layout from '../components/Layout';
 import { supabase } from '../lib/supabase';
 import type { TesteLiberado } from '../types';
 import { formatDateBR } from '../utils/dateUtils';
 import { formatPhone } from '../utils/clientHelpers';
+
+interface TesteSummary {
+  period: string;
+  total: number;
+  assinantes: number;
+  naoAssinantes: number;
+}
 
 export default function TestesLiberados() {
   const [testes, setTestes] = useState<TesteLiberado[]>([]);
@@ -75,6 +82,9 @@ export default function TestesLiberados() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
 
+  // Resumos
+  const [summaries, setSummaries] = useState<TesteSummary[]>([]);
+
   useEffect(() => {
     fetchTestes();
     fetchRechargeOptions();
@@ -139,6 +149,9 @@ export default function TestesLiberados() {
         return `${year}-${month}`;
       }))];
       setMeses(uniqueMeses.sort().reverse());
+
+      // Calcular resumos
+      calculateSummaries(data || []);
     } catch (err) {
       console.error('Error fetching testes:', err);
       setError('Erro ao carregar os dados. Por favor, tente novamente.');
@@ -146,6 +159,84 @@ export default function TestesLiberados() {
       setLoading(false);
     }
   }
+
+  const calculateSummaries = (data: TesteLiberado[]) => {
+    // Data atual no timezone do Brasil
+    const today = new Date();
+    const todayKey = today.toLocaleDateString('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).split('/').reverse().join('-'); // YYYY-MM-DD
+
+    const currentMonth = today.toLocaleDateString('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      year: 'numeric',
+      month: '2-digit'
+    }).split('/').reverse().join('-'); // YYYY-MM
+
+    // Mês passado
+    const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const lastMonthKey = lastMonth.toLocaleDateString('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      year: 'numeric',
+      month: '2-digit'
+    }).split('/').reverse().join('-'); // YYYY-MM
+
+    // Contadores
+    let todayTotal = 0, todayAssinantes = 0, todayNaoAssinantes = 0;
+    let currentMonthTotal = 0, currentMonthAssinantes = 0, currentMonthNaoAssinantes = 0;
+    let lastMonthTotal = 0, lastMonthAssinantes = 0, lastMonthNaoAssinantes = 0;
+
+    data.forEach(teste => {
+      const dateOnly = teste.data_teste.split('T')[0];
+      const [year, month] = dateOnly.split('-');
+      const monthKey = `${year}-${month}`;
+
+      // Hoje
+      if (dateOnly === todayKey) {
+        todayTotal++;
+        if (teste.assinante) todayAssinantes++;
+        else todayNaoAssinantes++;
+      }
+
+      // Mês atual
+      if (monthKey === currentMonth) {
+        currentMonthTotal++;
+        if (teste.assinante) currentMonthAssinantes++;
+        else currentMonthNaoAssinantes++;
+      }
+
+      // Mês passado
+      if (monthKey === lastMonthKey) {
+        lastMonthTotal++;
+        if (teste.assinante) lastMonthAssinantes++;
+        else lastMonthNaoAssinantes++;
+      }
+    });
+
+    setSummaries([
+      {
+        period: 'today',
+        total: todayTotal,
+        assinantes: todayAssinantes,
+        naoAssinantes: todayNaoAssinantes
+      },
+      {
+        period: currentMonth,
+        total: currentMonthTotal,
+        assinantes: currentMonthAssinantes,
+        naoAssinantes: currentMonthNaoAssinantes
+      },
+      {
+        period: lastMonthKey,
+        total: lastMonthTotal,
+        assinantes: lastMonthAssinantes,
+        naoAssinantes: lastMonthNaoAssinantes
+      }
+    ]);
+  };
 
   const filteredTestes = useMemo(() => {
     return testes.filter(teste => {
@@ -180,6 +271,14 @@ export default function TestesLiberados() {
   const formatMonth = (monthKey: string) => {
     if (monthKey === 'Total Geral') return monthKey;
     const [year, month] = monthKey.split('-');
+    return new Date(parseInt(year), parseInt(month) - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  };
+
+  const formatPeriod = (period: string) => {
+    if (period === 'today') {
+      return new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+    }
+    const [year, month] = period.split('-');
     return new Date(parseInt(year), parseInt(month) - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
   };
 
@@ -590,6 +689,48 @@ export default function TestesLiberados() {
           <Plus className="h-5 w-5 mr-2" />
           Novo Teste
         </button>
+      </div>
+
+      {/* Cards de Resumo */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        {summaries.map((summary, index) => (
+          <div key={summary.period} className="bg-slate-800 rounded-lg shadow p-6 border border-slate-700">
+            <h3 className="text-lg font-semibold text-slate-100 mb-4 flex items-center">
+              <Users className="h-5 w-5 mr-2 text-blue-400" />
+              {formatPeriod(summary.period)}
+            </h3>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-slate-400">Total de Testes</span>
+                <span className="text-2xl font-bold text-blue-400">{summary.total}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-slate-400">Convertidos</span>
+                <span className="text-lg font-medium text-green-400">{summary.assinantes}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-slate-400">Não Convertidos</span>
+                <span className="text-lg font-medium text-orange-400">{summary.naoAssinantes}</span>
+              </div>
+              {summary.total > 0 && (
+                <div className="pt-2 border-t border-slate-700">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-xs text-slate-400">Taxa de Conversão</span>
+                    <span className="text-sm font-medium text-slate-200">
+                      {((summary.assinantes / summary.total) * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-700 rounded-full h-2">
+                    <div 
+                      className="bg-green-500 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${(summary.assinantes / summary.total) * 100}%` }}
+                    ></div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Filters */}
