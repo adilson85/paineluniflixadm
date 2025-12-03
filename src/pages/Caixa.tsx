@@ -283,21 +283,21 @@ export default function Caixa() {
   const filteredMovimentacoes = useMemo(() => {
     return movimentacoes
       .filter(mov => {
-        const matchesSearch = mov.historico?.toLowerCase().includes(searchTerm.toLowerCase()) || false;
+    const matchesSearch = mov.historico?.toLowerCase().includes(searchTerm.toLowerCase()) || false;
 
-        // Filtro de período
-        const { start, end } = getDateRange();
-        let matchesPeriod = true;
+    // Filtro de período
+    const { start, end } = getDateRange();
+    let matchesPeriod = true;
 
-        if (start && end) {
-          // Extrai apenas a parte da data (YYYY-MM-DD) para evitar problemas de timezone
-          const dateOnly = mov.data.split('T')[0];
-          const [year, month, day] = dateOnly.split('-').map(Number);
-          const movDate = new Date(year, month - 1, day);
-          matchesPeriod = movDate >= start && movDate <= end;
-        }
+    if (start && end) {
+      // Extrai apenas a parte da data (YYYY-MM-DD) para evitar problemas de timezone
+      const dateOnly = mov.data.split('T')[0];
+      const [year, month, day] = dateOnly.split('-').map(Number);
+      const movDate = new Date(year, month - 1, day);
+      matchesPeriod = movDate >= start && movDate <= end;
+    }
 
-        return matchesSearch && matchesPeriod;
+    return matchesSearch && matchesPeriod;
       })
       .sort((a, b) => {
         // Ordenar do mais recente para o mais antigo
@@ -527,8 +527,8 @@ export default function Caixa() {
                     ) : (
                       <div className="flex space-x-2">
                         <button onClick={() => startEditing(mov)} className="text-blue-400 hover:text-blue-300" title="Editar">
-                          <Edit2 className="h-5 w-5" />
-                        </button>
+                        <Edit2 className="h-5 w-5" />
+                      </button>
                         <button onClick={() => abrirModalExcluir(mov)} className="text-red-400 hover:text-red-300" title="Excluir">
                           <Trash2 className="h-5 w-5" />
                         </button>

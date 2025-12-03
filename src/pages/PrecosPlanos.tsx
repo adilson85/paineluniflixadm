@@ -515,32 +515,32 @@ export default function PrecosPlanos() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center space-x-3">
-                        <button
-                          onClick={async () => {
-                            setEditingPromotion(promotion);
+                      <button
+                        onClick={async () => {
+                          setEditingPromotion(promotion);
+                          
+                          // Se for promoção individual, carregar clientes vinculados
+                          if (promotion.is_individual) {
+                            const { data: promotionUsers } = await supabase
+                              .from('promotion_users')
+                              .select('user_id')
+                              .eq('promotion_id', promotion.id)
+                              .eq('active', true);
                             
-                            // Se for promoção individual, carregar clientes vinculados
-                            if (promotion.is_individual) {
-                              const { data: promotionUsers } = await supabase
-                                .from('promotion_users')
-                                .select('user_id')
-                                .eq('promotion_id', promotion.id)
-                                .eq('active', true);
-                              
-                              if (promotionUsers) {
-                                setSelectedUsers(promotionUsers.map(pu => pu.user_id));
-                              }
-                            } else {
-                              setSelectedUsers([]);
+                            if (promotionUsers) {
+                              setSelectedUsers(promotionUsers.map(pu => pu.user_id));
                             }
-                            
-                            setShowPromotionModal(true);
-                          }}
-                          className="text-blue-400 hover:text-blue-300"
+                          } else {
+                            setSelectedUsers([]);
+                          }
+                          
+                          setShowPromotionModal(true);
+                        }}
+                        className="text-blue-400 hover:text-blue-300"
                           title="Editar Promoção"
-                        >
-                          <Edit2 className="h-5 w-5" />
-                        </button>
+                      >
+                        <Edit2 className="h-5 w-5" />
+                      </button>
                         <button
                           onClick={() => {
                             setPromotionToDelete(promotion);

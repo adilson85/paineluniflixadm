@@ -272,18 +272,18 @@ export default function Login() {
                 Senha
               </label>
               <div className="relative mt-1">
-                <input
-                  {...register('password', {
-                    required: 'Senha é obrigatória',
-                    minLength: {
-                      value: 6,
-                      message: 'A senha deve ter pelo menos 6 caracteres',
-                    },
-                  })}
+              <input
+                {...register('password', {
+                  required: 'Senha é obrigatória',
+                  minLength: {
+                    value: 6,
+                    message: 'A senha deve ter pelo menos 6 caracteres',
+                  },
+                })}
                   type={showPassword ? 'text' : 'password'}
                   className="block w-full rounded-md border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500 pr-10"
-                  placeholder="••••••"
-                />
+                placeholder="••••••"
+              />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}

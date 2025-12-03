@@ -135,14 +135,14 @@ export default function CreditosComprados() {
 
   const filteredCompras = useMemo(() => {
     return compras.filter(compra => {
-      const matchesPainel = !painelFilter || compra.painel === painelFilter;
-      // Extrai apenas a parte da data (YYYY-MM-DD) para evitar problemas de timezone
-      const dateOnly = compra.data.split('T')[0];
-      const [year, month] = dateOnly.split('-');
-      const monthKey = `${year}-${month}`;
-      const matchesMes = !mesFilter || monthKey === mesFilter;
-      return matchesPainel && matchesMes;
-    });
+    const matchesPainel = !painelFilter || compra.painel === painelFilter;
+    // Extrai apenas a parte da data (YYYY-MM-DD) para evitar problemas de timezone
+    const dateOnly = compra.data.split('T')[0];
+    const [year, month] = dateOnly.split('-');
+    const monthKey = `${year}-${month}`;
+    const matchesMes = !mesFilter || monthKey === mesFilter;
+    return matchesPainel && matchesMes;
+  });
   }, [compras, painelFilter, mesFilter]);
 
   // Cálculos de paginação

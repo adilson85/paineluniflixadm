@@ -113,14 +113,14 @@ export default function CreditosVendidos() {
 
   const filteredCreditos = useMemo(() => {
     return creditos.filter(credito => {
-      const matchesSearch = credito.historico.toLowerCase().includes(searchTerm.toLowerCase());
-      // Extrai apenas a parte da data (YYYY-MM-DD) para evitar problemas de timezone
-      const dateOnly = credito.data.split('T')[0];
-      const [year, month] = dateOnly.split('-');
-      const monthKey = `${year}-${month}`;
-      const matchesMes = !mesFilter || monthKey === mesFilter;
-      return matchesSearch && matchesMes;
-    });
+    const matchesSearch = credito.historico.toLowerCase().includes(searchTerm.toLowerCase());
+    // Extrai apenas a parte da data (YYYY-MM-DD) para evitar problemas de timezone
+    const dateOnly = credito.data.split('T')[0];
+    const [year, month] = dateOnly.split('-');
+    const monthKey = `${year}-${month}`;
+    const matchesMes = !mesFilter || monthKey === mesFilter;
+    return matchesSearch && matchesMes;
+  });
   }, [creditos, searchTerm, mesFilter]);
 
   // Cálculos de paginação
