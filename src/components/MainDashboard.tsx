@@ -50,21 +50,23 @@ export default function MainDashboard({ clients, periodFilter, startDate, endDat
   }, [clients, periodFilter, startDate, endDate]);
 
   const isInPeriod = (date: string) => {
-    const checkDate = new Date(date);
+    // Extrair ano-mes da data no formato YYYY-MM-DD (evita problemas de timezone)
+    const dateStr = date.split('T')[0]; // Remove hora se tiver
+    const [year, month] = dateStr.split('-').map(Number);
+
     const today = new Date();
+    const currentYear = today.getFullYear();
+    const currentMonth = today.getMonth() + 1; // getMonth() retorna 0-11, precisamos 1-12
 
     if (periodFilter === 'current_month') {
-      return today.getMonth() === checkDate.getMonth() &&
-             today.getFullYear() === checkDate.getFullYear();
+      return year === currentYear && month === currentMonth;
     } else if (periodFilter === 'last_month') {
-      const lastMonth = new Date(today);
-      lastMonth.setMonth(lastMonth.getMonth() - 1);
-      return lastMonth.getMonth() === checkDate.getMonth() &&
-             lastMonth.getFullYear() === checkDate.getFullYear();
+      const lastMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+      const lastMonthYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+      return year === lastMonthYear && month === lastMonth;
     } else if (periodFilter === 'custom' && startDate && endDate) {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      return checkDate >= start && checkDate <= end;
+      // Para custom, usar comparação de strings é mais seguro
+      return dateStr >= startDate && dateStr <= endDate;
     }
 
     return true; // Se custom sem datas, mostrar tudo

@@ -104,12 +104,12 @@ serve(async (req) => {
       console.log(`✅ Usando duração direta: ${finalDurationMonths} meses`);
     }
 
-    // 3. Buscar subscriptions ativas
+    // 3. Buscar subscriptions (aceita active, expired, cancelled - todas que existem)
     const { data: subscriptions, error: subError } = await supabaseAdmin
       .from('subscriptions')
       .select('*')
       .eq('user_id', user.id)
-      .eq('status', 'active');
+      .in('status', ['active', 'expired', 'cancelled']);
 
     if (subError) {
       console.error('❌ Erro ao buscar subscriptions:', subError);
@@ -117,16 +117,16 @@ serve(async (req) => {
     }
 
     if (!subscriptions || subscriptions.length === 0) {
-      throw new Error('Cliente não possui assinaturas ativas');
+      throw new Error('Cliente não possui assinaturas. Por favor, crie uma assinatura para o cliente antes de adicionar créditos.');
     }
 
     const quantidadePontos = subscriptions.length;
     const quantidadeCreditos = quantidadePontos * finalDurationMonths;
 
-    console.log(`✅ Cliente tem ${quantidadePontos} ponto(s) ativo(s)`);
+    console.log(`✅ Cliente tem ${quantidadePontos} ponto(s)`);
     console.log(`✅ Adicionando ${quantidadeCreditos} crédito(s) (${quantidadePontos} × ${finalDurationMonths} meses)`);
 
-    // 4. Atualizar datas de expiração das subscriptions
+    // 4. Atualizar datas de expiração E status das subscriptions
     const updates = subscriptions.map(sub => {
       const hoje = new Date();
       const dataExpiracao = new Date(sub.expiration_date);
@@ -138,13 +138,14 @@ serve(async (req) => {
         .from('subscriptions')
         .update({
           expiration_date: newExpiration.toISOString().split('T')[0],
+          status: 'active', // Reativa a subscription ao adicionar créditos
           updated_at: new Date().toISOString(),
         })
         .eq('id', sub.id);
     });
 
     const updateResults = await Promise.all(updates);
-    
+
     // Verificar se algum update falhou
     for (const result of updateResults) {
       if (result.error) {
@@ -153,7 +154,7 @@ serve(async (req) => {
       }
     }
 
-    console.log('✅ Datas de expiração atualizadas');
+    console.log('✅ Datas de expiração atualizadas e status reativado');
 
     // 5. Calcular valor final (com desconto se fornecido)
     let valorFinal = valorPago || 0;
@@ -274,6 +275,8 @@ serve(async (req) => {
         subscriptions: subscriptions.map(sub => ({
           id: sub.id,
           old_expiration: sub.expiration_date,
+          old_status: sub.status,
+          new_status: 'active',
           new_expiration: (() => {
             const hoje = new Date();
             const dataExpiracao = new Date(sub.expiration_date);
@@ -303,6 +306,8 @@ serve(async (req) => {
     );
   }
 });
+
+
 
 
 

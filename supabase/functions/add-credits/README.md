@@ -104,16 +104,22 @@ Authorization: Bearer SUA_CHAVE_AQUI
     {
       "id": "uuid-subscription-1",
       "old_expiration": "2025-12-10",
+      "old_status": "expired",
+      "new_status": "active",
       "new_expiration": "2026-03-10"
     },
     {
       "id": "uuid-subscription-2",
       "old_expiration": "2025-12-10",
+      "old_status": "expired",
+      "new_status": "active",
       "new_expiration": "2026-03-10"
     },
     {
       "id": "uuid-subscription-3",
       "old_expiration": "2025-12-10",
+      "old_status": "active",
+      "new_status": "active",
       "new_expiration": "2026-03-10"
     }
   ]
@@ -133,12 +139,18 @@ Authorization: Bearer SUA_CHAVE_AQUI
 
 1. Busca o cliente (user) por ID, email ou telefone
 2. Busca a opção de recarga (se fornecido `rechargeOptionId`)
-3. Busca todas as subscriptions ativas do cliente
+3. **Busca TODAS as subscriptions do cliente (active, expired, cancelled)**
 4. Calcula quantidade de créditos (pontos × meses)
-5. Atualiza datas de expiração de todas as subscriptions
+5. **Atualiza datas de expiração E reativa o status para 'active'**
 6. Registra entrada no caixa (se valor pago > 0)
 7. Cria transação (para acionar trigger de comissão)
 8. Registra créditos vendidos
+
+## ⚠️ Importante:
+
+- **Reativação Automática**: Assinaturas expiradas ou canceladas são automaticamente reativadas ao adicionar créditos
+- **Cálculo de Data**: Se a assinatura já expirou, conta a partir de hoje. Se ainda está ativa, conta a partir da data de expiração atual
+- **Erro se não houver subscriptions**: O cliente precisa ter pelo menos uma subscription cadastrada (mesmo que expirada)
 
 ## Integração com N8N
 
@@ -158,6 +170,8 @@ No N8N, use o nó **HTTP Request**:
   "historico": "Recarga automática via N8N"
 }
 ```
+
+
 
 
 
