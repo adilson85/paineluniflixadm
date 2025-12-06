@@ -235,3 +235,5 @@ Você pode configurar no N8N para executar esta função periodicamente (ex: dia
 
 
 
+
+

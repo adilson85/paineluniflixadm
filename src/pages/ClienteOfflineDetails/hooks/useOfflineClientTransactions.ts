@@ -49,15 +49,32 @@ export function useOfflineClientTransactions(offlineClientId: string | undefined
       // Se a assinatura já expirou, soma a partir de hoje
       // Se ainda está ativa, soma a partir da data de expiração
       const hoje = new Date();
-      const dataExpiracao = new Date(client.data_expiracao);
+      hoje.setHours(0, 0, 0, 0); // Normalizar para meia-noite
+
+      // Extrair data sem conversão de timezone
+      const dateStr = typeof client.data_expiracao === 'string'
+        ? client.data_expiracao.split('T')[0]
+        : client.data_expiracao;
+
+      // Parse manual da data para evitar timezone
+      const [year, month, day] = dateStr.split('-').map(Number);
+      const dataExpiracao = new Date(year, month - 1, day);
+      dataExpiracao.setHours(0, 0, 0, 0);
+
       const currentExpiration = dataExpiracao > hoje ? dataExpiracao : hoje;
       const newExpiration = new Date(currentExpiration);
       newExpiration.setMonth(newExpiration.getMonth() + selectedOption.duration_months);
 
+      // Formatar data manualmente para evitar timezone
+      const newYear = newExpiration.getFullYear();
+      const newMonth = String(newExpiration.getMonth() + 1).padStart(2, '0');
+      const newDay = String(newExpiration.getDate()).padStart(2, '0');
+      const newExpirationStr = `${newYear}-${newMonth}-${newDay}`;
+
       const { error: updateError } = await supabase
         .from('offline_clients')
         .update({
-          data_expiracao: newExpiration.toISOString().split('T')[0],
+          data_expiracao: newExpirationStr,
           updated_at: new Date().toISOString(),
         })
         .eq('id', params.clientId);
@@ -121,6 +138,8 @@ export function useOfflineClientTransactions(offlineClientId: string | undefined
     addCredits,
   };
 }
+
+
 
 
 

@@ -77,6 +77,17 @@ export function EditarClienteOfflineModal({
   // Preencher form quando modal abrir ou cliente mudar
   useEffect(() => {
     if (isOpen && client) {
+      // Extrair data sem conversão de timezone
+      let dataExpiracaoFormatted = '';
+      if (client.data_expiracao) {
+        // Se vier como string "2025-12-18", usar diretamente
+        // Se vier como Date object ou ISO string, extrair apenas a parte da data
+        const dateStr = typeof client.data_expiracao === 'string'
+          ? client.data_expiracao.split('T')[0]
+          : client.data_expiracao;
+        dataExpiracaoFormatted = dateStr;
+      }
+
       setFormData({
         nome: client.nome || '',
         telefone: client.telefone || '',
@@ -92,7 +103,7 @@ export function EditarClienteOfflineModal({
         login_03: client.login_03 || '',
         senha_03: client.senha_03 || '',
         painel_03: client.painel_03 || '',
-        data_expiracao: client.data_expiracao ? new Date(client.data_expiracao).toISOString().split('T')[0] : '',
+        data_expiracao: dataExpiracaoFormatted,
         valor_mensal: client.valor_mensal?.toString() || '',
       });
       setError(null);
@@ -592,6 +603,8 @@ export function EditarClienteOfflineModal({
     </div>
   );
 }
+
+
 
 
 

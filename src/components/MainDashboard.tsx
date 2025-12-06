@@ -136,19 +136,10 @@ export default function MainDashboard({ clients, periodFilter, startDate, endDat
           if (!t.entrada || t.entrada === 0) return false;
           // Campo de data é "data"
           const dateField = t.data || t.created_at;
-          if (!dateField) {
-            console.warn('⚠️ Transação sem data:', t);
-            return false;
-          }
-          const inPeriod = isInPeriod(dateField);
-          if (inPeriod) {
-            console.log('✅ Entrada contada:', { data: dateField, valor: t.entrada, historico: t.historico });
-          }
-          return inPeriod;
+          if (!dateField) return false;
+          return isInPeriod(dateField);
         })
         .reduce((sum: number, t: any) => sum + (parseFloat(t.entrada) || 0), 0);
-
-      console.log(`📊 Total de Receita no Período: R$ ${monthlyRevenue.toFixed(2)}`);
 
       // DESPESAS: Somar TODAS as SAÍDAS do caixa no período (não só compras de créditos)
       const estimatedExpenses = (transactions || [])
@@ -157,19 +148,10 @@ export default function MainDashboard({ clients, periodFilter, startDate, endDat
           if (!t.saida || t.saida === 0) return false;
           // Campo de data é "data"
           const dateField = t.data || t.created_at;
-          if (!dateField) {
-            console.warn('⚠️ Saída sem data:', t);
-            return false;
-          }
-          const inPeriod = isInPeriod(dateField);
-          if (inPeriod) {
-            console.log('💳 Despesa contada:', { data: dateField, valor: t.saida, historico: t.historico });
-          }
-          return inPeriod;
+          if (!dateField) return false;
+          return isInPeriod(dateField);
         })
         .reduce((sum: number, t: any) => sum + (parseFloat(t.saida) || 0), 0);
-
-      console.log(`💰 Total de Despesas no Período: R$ ${estimatedExpenses.toFixed(2)}`);
 
       // LUCRO/SALDO: Receita - Despesas
       const profit = monthlyRevenue - estimatedExpenses;
