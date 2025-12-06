@@ -161,10 +161,19 @@ export default function MainDashboard({ clients, periodFilter, startDate, endDat
       const estimatedExpenses = (creditData || [])
         .filter((compra: any) => {
           const dateField = compra.data || compra.created_at;
-          if (!dateField) return false;
-          return isInPeriod(dateField);
+          if (!dateField) {
+            console.warn('⚠️ Compra sem data:', compra);
+            return false;
+          }
+          const inPeriod = isInPeriod(dateField);
+          if (inPeriod) {
+            console.log('💳 Despesa contada:', { data: dateField, valor: compra.valor_total, fornecedor: compra.fornecedor });
+          }
+          return inPeriod;
         })
         .reduce((sum: number, compra: any) => sum + (compra.valor_total || 0), 0);
+
+      console.log(`💰 Total de Despesas no Período: R$ ${estimatedExpenses.toFixed(2)}`);
 
       // LUCRO/SALDO: Receita - Despesas
       const profit = monthlyRevenue - estimatedExpenses;
