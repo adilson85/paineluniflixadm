@@ -30,10 +30,16 @@ export function useOfflineClientData(clientId: string | undefined) {
         throw new Error('Cliente offline não encontrado');
       }
 
-      // Calcular status baseado na data de expiração
-      const expirationDate = new Date(data.data_expiracao);
+      // Calcular status baseado na data de expiração (parse manual para evitar timezone)
       const today = new Date();
       today.setHours(0, 0, 0, 0);
+
+      // Parse manual da data para evitar timezone
+      const dateStr = data.data_expiracao.split('T')[0];
+      const [year, month, day] = dateStr.split('-').map(Number);
+      const expirationDate = new Date(year, month - 1, day);
+      expirationDate.setHours(0, 0, 0, 0);
+
       const status = expirationDate >= today ? 'Ativo' : 'Expirado';
 
       setClient({ ...data, status } as OfflineClient);

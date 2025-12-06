@@ -56,32 +56,44 @@ export default function ClientesOffline() {
     });
   }
 
-  // Filtro por data de expiração
+  // Filtro por data de expiração (parse manual para evitar timezone)
   if (dateFilterType === 'single' && singleDate) {
     filteredClients = filteredClients.filter(client => {
-      const clientDate = new Date(client.data_expiracao);
+      // Parse manual da data do cliente
+      const clientDateStr = client.data_expiracao.split('T')[0];
+      const [clientYear, clientMonth, clientDay] = clientDateStr.split('-').map(Number);
+      const clientDate = new Date(clientYear, clientMonth - 1, clientDay);
       clientDate.setHours(0, 0, 0, 0);
-      const filterDate = new Date(singleDate);
+
+      // Parse manual da data do filtro
+      const [filterYear, filterMonth, filterDay] = singleDate.split('-').map(Number);
+      const filterDate = new Date(filterYear, filterMonth - 1, filterDay);
       filterDate.setHours(0, 0, 0, 0);
+
       return clientDate.getTime() === filterDate.getTime();
     });
   } else if (dateFilterType === 'range') {
     filteredClients = filteredClients.filter(client => {
-      const clientDate = new Date(client.data_expiracao);
+      // Parse manual da data do cliente
+      const clientDateStr = client.data_expiracao.split('T')[0];
+      const [clientYear, clientMonth, clientDay] = clientDateStr.split('-').map(Number);
+      const clientDate = new Date(clientYear, clientMonth - 1, clientDay);
       clientDate.setHours(0, 0, 0, 0);
-      
+
       if (startDate) {
-        const start = new Date(startDate);
+        const [startYear, startMonth, startDay] = startDate.split('-').map(Number);
+        const start = new Date(startYear, startMonth - 1, startDay);
         start.setHours(0, 0, 0, 0);
         if (clientDate < start) return false;
       }
-      
+
       if (endDate) {
-        const end = new Date(endDate);
+        const [endYear, endMonth, endDay] = endDate.split('-').map(Number);
+        const end = new Date(endYear, endMonth - 1, endDay);
         end.setHours(23, 59, 59, 999);
         if (clientDate > end) return false;
       }
-      
+
       return true;
     });
   }
@@ -100,8 +112,14 @@ export default function ClientesOffline() {
             bValue = b.nome?.toLowerCase() || '';
             break;
           case 'data_expiracao':
-            aValue = new Date(a.data_expiracao).getTime();
-            bValue = new Date(b.data_expiracao).getTime();
+            // Parse manual para evitar timezone
+            const aDateStr = a.data_expiracao.split('T')[0];
+            const [aYear, aMonth, aDay] = aDateStr.split('-').map(Number);
+            aValue = new Date(aYear, aMonth - 1, aDay).getTime();
+
+            const bDateStr = b.data_expiracao.split('T')[0];
+            const [bYear, bMonth, bDay] = bDateStr.split('-').map(Number);
+            bValue = new Date(bYear, bMonth - 1, bDay).getTime();
             break;
           case 'valor_mensal':
             aValue = a.valor_mensal || 0;
@@ -124,9 +142,15 @@ export default function ClientesOffline() {
     tomorrow.setDate(tomorrow.getDate() + 1);
 
     return [...filteredClients].sort((a, b) => {
-      const dateA = new Date(a.data_expiracao);
+      // Parse manual para evitar timezone
+      const aDateStr = a.data_expiracao.split('T')[0];
+      const [aYear, aMonth, aDay] = aDateStr.split('-').map(Number);
+      const dateA = new Date(aYear, aMonth - 1, aDay);
       dateA.setHours(0, 0, 0, 0);
-      const dateB = new Date(b.data_expiracao);
+
+      const bDateStr = b.data_expiracao.split('T')[0];
+      const [bYear, bMonth, bDay] = bDateStr.split('-').map(Number);
+      const dateB = new Date(bYear, bMonth - 1, bDay);
       dateB.setHours(0, 0, 0, 0);
 
       const isAExpired = dateA < today;

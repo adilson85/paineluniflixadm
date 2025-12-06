@@ -2,6 +2,7 @@ import type { OfflineClient } from '../types';
 
 /**
  * Calcula o status do cliente offline baseado na data de expiração
+ * Parse manual para evitar problemas de timezone
  */
 export function calculateOfflineClientStatus(dataExpiracao: string | null): 'Ativo' | 'Expirado' {
   if (!dataExpiracao) return 'Expirado';
@@ -9,7 +10,10 @@ export function calculateOfflineClientStatus(dataExpiracao: string | null): 'Ati
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const expiration = new Date(dataExpiracao);
+  // Parse manual da data para evitar timezone
+  const dateStr = dataExpiracao.split('T')[0];
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const expiration = new Date(year, month - 1, day);
   expiration.setHours(0, 0, 0, 0);
 
   return expiration >= today ? 'Ativo' : 'Expirado';
@@ -86,12 +90,16 @@ export function canMigrateOfflineClient(client: OfflineClient): {
 
 /**
  * Calcula quantos dias faltam para expirar
+ * Parse manual para evitar problemas de timezone
  */
 export function getDaysUntilExpiration(dataExpiracao: string): number {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const expiration = new Date(dataExpiracao);
+  // Parse manual da data para evitar timezone
+  const dateStr = dataExpiracao.split('T')[0];
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const expiration = new Date(year, month - 1, day);
   expiration.setHours(0, 0, 0, 0);
 
   const diffTime = expiration.getTime() - today.getTime();

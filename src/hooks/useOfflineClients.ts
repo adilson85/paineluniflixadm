@@ -21,12 +21,17 @@ export function useOfflineClients() {
 
       if (fetchError) throw fetchError;
 
-      // Calcular status para cada cliente
+      // Calcular status para cada cliente (parse manual para evitar timezone)
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
       const clientsWithStatus = (data || []).map((client) => {
-        const expirationDate = new Date(client.data_expiracao);
+        // Parse manual da data para evitar timezone
+        const dateStr = client.data_expiracao.split('T')[0];
+        const [year, month, day] = dateStr.split('-').map(Number);
+        const expirationDate = new Date(year, month - 1, day);
+        expirationDate.setHours(0, 0, 0, 0);
+
         const status = expirationDate >= today ? 'Ativo' : 'Expirado';
         return { ...client, status };
       });

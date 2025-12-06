@@ -7,6 +7,7 @@ import type { Client, User, Subscription, OfflineClient } from '../types';
 
 /**
  * Calcula o status de um cliente baseado na data de expiração
+ * Parse manual para evitar problemas de timezone
  */
 export function calculateStatus(expirationDate: string | null): 'Ativo' | 'Expirado' {
   if (!expirationDate) return 'Ativo';
@@ -14,7 +15,12 @@ export function calculateStatus(expirationDate: string | null): 'Ativo' | 'Expir
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const expiration = new Date(expirationDate);
+  // Parse manual da data para evitar timezone
+  const dateStr = expirationDate.split('T')[0];
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const expiration = new Date(year, month - 1, day);
+  expiration.setHours(0, 0, 0, 0);
+
   return expiration >= today ? 'Ativo' : 'Expirado';
 }
 
@@ -114,9 +120,34 @@ export function formatCurrency(value: number): string {
 
 /**
  * Formata uma data para exibição em português
+ * Parse manual para evitar problemas de timezone
  */
 export function formatDate(date: string | Date, includeTime = false): string {
-  const dateObj = typeof date === 'string' ? new Date(date) : date;
+  if (typeof date === 'string') {
+    // Parse manual para evitar conversão de timezone
+    const dateStr = date.split('T')[0]; // "2025-12-18"
+    const [year, month, day] = dateStr.split('-').map(Number);
+
+    if (includeTime && date.includes('T')) {
+      // Se tem horário, usar o Date object
+      const dateObj = new Date(date);
+      return dateObj.toLocaleString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    }
+
+    // Formatar manualmente sem conversão de timezone
+    const dayStr = String(day).padStart(2, '0');
+    const monthStr = String(month).padStart(2, '0');
+    return `${dayStr}/${monthStr}/${year}`;
+  }
+
+  // Se já é um Date object, usar toLocaleDateString normalmente
+  const dateObj = date;
 
   if (includeTime) {
     return dateObj.toLocaleString('pt-BR', {
@@ -137,12 +168,16 @@ export function formatDate(date: string | Date, includeTime = false): string {
 
 /**
  * Calcula quantos dias faltam até uma data
+ * Parse manual para evitar problemas de timezone
  */
 export function daysUntil(date: string): number {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const targetDate = new Date(date);
+  // Parse manual da data para evitar timezone
+  const dateStr = date.split('T')[0];
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const targetDate = new Date(year, month - 1, day);
   targetDate.setHours(0, 0, 0, 0);
 
   const diffTime = targetDate.getTime() - today.getTime();
@@ -325,13 +360,18 @@ export function getBotConversaLink(telefone: string): string {
 
 /**
  * Transforma um cliente offline para o formato Client
+ * Parse manual para evitar problemas de timezone
  */
 export function transformOfflineClientToClient(offlineClient: OfflineClient): Client {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const expirationDate = new Date(offlineClient.data_expiracao);
+
+  // Parse manual da data para evitar timezone
+  const dateStr = offlineClient.data_expiracao.split('T')[0];
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const expirationDate = new Date(year, month - 1, day);
   expirationDate.setHours(0, 0, 0, 0);
-  
+
   return {
     id: offlineClient.id,
     nome: offlineClient.nome,
