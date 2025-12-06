@@ -50,9 +50,20 @@ export default function MainDashboard({ clients, periodFilter, startDate, endDat
   }, [clients, periodFilter, startDate, endDate]);
 
   const isInPeriod = (date: string) => {
+    if (!date) return false;
+
     // Extrair ano-mes da data no formato YYYY-MM-DD (evita problemas de timezone)
     const dateStr = date.split('T')[0]; // Remove hora se tiver
-    const [year, month] = dateStr.split('-').map(Number);
+    const parts = dateStr.split('-');
+
+    // Validar se tem 3 partes (ano-mês-dia)
+    if (parts.length !== 3) return false;
+
+    const year = parseInt(parts[0]);
+    const month = parseInt(parts[1]);
+
+    // Validar se são números válidos
+    if (isNaN(year) || isNaN(month)) return false;
 
     const today = new Date();
     const currentYear = today.getFullYear();
@@ -132,10 +143,19 @@ export default function MainDashboard({ clients, periodFilter, startDate, endDat
           if (!t.entrada || t.entrada === 0) return false;
           // Campo de data é "data"
           const dateField = t.data || t.created_at;
-          if (!dateField) return false;
-          return isInPeriod(dateField);
+          if (!dateField) {
+            console.warn('⚠️ Transação sem data:', t);
+            return false;
+          }
+          const inPeriod = isInPeriod(dateField);
+          if (inPeriod) {
+            console.log('✅ Entrada contada:', { data: dateField, valor: t.entrada, historico: t.historico });
+          }
+          return inPeriod;
         })
         .reduce((sum: number, t: any) => sum + (parseFloat(t.entrada) || 0), 0);
+
+      console.log(`📊 Total de Receita no Período: R$ ${monthlyRevenue.toFixed(2)}`);
 
       // DESPESAS: Compras de créditos no período
       const estimatedExpenses = (creditData || [])
