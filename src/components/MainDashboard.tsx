@@ -95,19 +95,12 @@ export default function MainDashboard({ clients, periodFilter, startDate, endDat
 
       if (testsError) throw testsError;
 
-      // Buscar transações (caixa)
+      // Buscar transações (caixa) - contém entradas E saídas
       const { data: transactions, error: transError } = await supabase
         .from('caixa_movimentacoes')
         .select('*');
 
       if (transError) throw transError;
-
-      // Buscar compras de créditos
-      const { data: creditData, error: creditError } = await supabase
-        .from('compras_creditos')
-        .select('*');
-
-      if (creditError) throw creditError;
 
       // Buscar créditos vendidos
       const { data: creditosVendidos, error: creditosError } = await supabase
@@ -157,21 +150,24 @@ export default function MainDashboard({ clients, periodFilter, startDate, endDat
 
       console.log(`📊 Total de Receita no Período: R$ ${monthlyRevenue.toFixed(2)}`);
 
-      // DESPESAS: Compras de créditos no período
-      const estimatedExpenses = (creditData || [])
-        .filter((compra: any) => {
-          const dateField = compra.data || compra.created_at;
+      // DESPESAS: Somar TODAS as SAÍDAS do caixa no período (não só compras de créditos)
+      const estimatedExpenses = (transactions || [])
+        .filter((t: any) => {
+          // Verificar se tem valor em saída
+          if (!t.saida || t.saida === 0) return false;
+          // Campo de data é "data"
+          const dateField = t.data || t.created_at;
           if (!dateField) {
-            console.warn('⚠️ Compra sem data:', compra);
+            console.warn('⚠️ Saída sem data:', t);
             return false;
           }
           const inPeriod = isInPeriod(dateField);
           if (inPeriod) {
-            console.log('💳 Despesa contada:', { data: dateField, valor: compra.valor_total, fornecedor: compra.fornecedor });
+            console.log('💳 Despesa contada:', { data: dateField, valor: t.saida, historico: t.historico });
           }
           return inPeriod;
         })
-        .reduce((sum: number, compra: any) => sum + (compra.valor_total || 0), 0);
+        .reduce((sum: number, t: any) => sum + (parseFloat(t.saida) || 0), 0);
 
       console.log(`💰 Total de Despesas no Período: R$ ${estimatedExpenses.toFixed(2)}`);
 
