@@ -141,10 +141,18 @@ export default function CreditosVendidos() {
 
     dataToAnalyze.forEach(credito => {
       const painelName = credito.painel || 'Sem Painel';
-      const current = painelMap.get(painelName) || { painel: painelName, total_creditos: 0, quantidade_vendas: 0 };
+      // Normalizar nome do painel (lowercase) para agrupar corretamente
+      const normalizedName = painelName.trim().toLowerCase();
+
+      const current = painelMap.get(normalizedName) || {
+        painel: painelName.trim(), // Mantém o nome original (primeira ocorrência)
+        total_creditos: 0,
+        quantidade_vendas: 0
+      };
+
       current.total_creditos += credito.quantidade_creditos;
       current.quantidade_vendas += 1;
-      painelMap.set(painelName, current);
+      painelMap.set(normalizedName, current);
     });
 
     return Array.from(painelMap.values()).sort((a, b) => b.total_creditos - a.total_creditos);

@@ -156,6 +156,32 @@ export default function CreditosComprados() {
     setCurrentPage(1);
   }, [painelFilter, mesFilter]);
 
+  // Resumo por painel (baseado no filtro de mês selecionado ou todos)
+  const resumoPorPainel = useMemo(() => {
+    const dataToAnalyze = mesFilter ? filteredCompras : compras;
+    const painelMap = new Map<string, { painel: string; total_creditos: number; quantidade_compras: number; valor_total: number }>();
+
+    dataToAnalyze.forEach(compra => {
+      const painelName = compra.painel || 'Sem Painel';
+      // Normalizar nome do painel (lowercase) para agrupar corretamente
+      const normalizedName = painelName.trim().toLowerCase();
+
+      const current = painelMap.get(normalizedName) || {
+        painel: painelName.trim(), // Mantém o nome original (primeira ocorrência)
+        total_creditos: 0,
+        quantidade_compras: 0,
+        valor_total: 0
+      };
+
+      current.total_creditos += compra.quantidade_creditos;
+      current.quantidade_compras += 1;
+      current.valor_total += compra.valor_total;
+      painelMap.set(normalizedName, current);
+    });
+
+    return Array.from(painelMap.values()).sort((a, b) => b.total_creditos - a.total_creditos);
+  }, [compras, filteredCompras, mesFilter]);
+
   const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   const formatDate = (dateString: string) => formatDateBR(dateString);
   const formatMonth = (monthKey: string) => {
@@ -256,6 +282,58 @@ export default function CreditosComprados() {
           </div>
         ))}
       </div>
+
+      {/* Resumo por Painel */}
+      {resumoPorPainel.length > 0 && (
+        <div className="bg-slate-800 rounded-lg shadow p-6 border border-slate-700 mb-6">
+          <h3 className="text-lg font-semibold text-slate-100 mb-4">
+            Créditos por Painel {mesFilter ? `(${formatMonth(mesFilter)})` : '(Total Geral)'}
+          </h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            {resumoPorPainel.map((painel, index) => {
+              // Calcular porcentagem do total
+              const totalGeral = resumoPorPainel.reduce((acc, p) => acc + p.total_creditos, 0);
+              const percentual = totalGeral > 0 ? ((painel.total_creditos / totalGeral) * 100).toFixed(1) : '0';
+
+              // Cores diferentes para destacar os top 3
+              const bgColors = [
+                'bg-gradient-to-br from-amber-600/20 to-amber-700/10 border-amber-600/50', // 1º lugar
+                'bg-gradient-to-br from-slate-500/20 to-slate-600/10 border-slate-500/50', // 2º lugar
+                'bg-gradient-to-br from-orange-700/20 to-orange-800/10 border-orange-700/50', // 3º lugar
+              ];
+              const bgColor = index < 3 ? bgColors[index] : 'bg-slate-900/50 border-slate-700';
+
+              return (
+                <div
+                  key={painel.painel}
+                  className={`rounded-lg p-4 border ${bgColor} transition-all hover:scale-105`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-slate-300">{painel.painel}</span>
+                    {index < 3 && (
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-slate-700 text-slate-300">
+                        #{index + 1}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-2xl font-bold text-slate-100">{painel.total_creditos}</p>
+                  <div className="flex items-center justify-between mt-2">
+                    <span className="text-xs text-slate-400">{painel.quantidade_compras} compras</span>
+                    <span className="text-xs font-medium text-blue-400">{percentual}%</span>
+                  </div>
+                  {/* Barra de progresso visual */}
+                  <div className="mt-2 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-blue-500 rounded-full transition-all"
+                      style={{ width: `${percentual}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Filtros */}
       <div className="mb-6 space-y-4 md:space-y-0 md:flex md:items-center md:space-x-4">

@@ -146,7 +146,12 @@ export default function Dashboard() {
         <PendingWithdrawals />
       </div>
 
-      <AnalyticsPanel clients={clients} />
+      <AnalyticsPanel
+        clients={clients}
+        periodFilter={periodFilter}
+        startDate={startDate}
+        endDate={endDate}
+      />
     </Layout>
   );
 }
